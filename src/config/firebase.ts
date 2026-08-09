@@ -12,6 +12,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1234567890:web:1234567890',
 }
 
+export const isFirebaseConfigured = Boolean(
+  import.meta.env.VITE_FIREBASE_API_KEY &&
+    import.meta.env.VITE_FIREBASE_API_KEY !== 'demo-api-key' &&
+    import.meta.env.VITE_FIREBASE_PROJECT_ID &&
+    import.meta.env.VITE_FIREBASE_PROJECT_ID !== 'demo-project'
+)
+
 // Initialize Firebase App (Singleton pattern)
 const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
 

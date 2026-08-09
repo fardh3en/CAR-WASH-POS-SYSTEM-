@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function: Is user authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function: Check if current user has matching UID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Helper function: Get user document
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper function: Is Admin role
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'ADMIN' && getUserData().isActive == true;
+    }
+
+    // Helper function: Is active staff or admin
+    function isActiveUser() {
+      return isAuthenticated() && getUserData().isActive == true;
+    }
+
+    // Users Collection Security Rules
+    match /users/{userId} {
+      // Authenticated users can read their own profile; Admin can read all profiles
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Only Admin can create or modify user profiles/roles
+      allow create, update: if isAdmin();
+      
+      // Deletions disallowed (soft delete via isActive = false)
+      allow delete: if false;
+    }
+    
+    // Default deny all other collections for Phase 2
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
