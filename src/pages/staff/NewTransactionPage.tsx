@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import type { Vehicle, VehicleCategory } from '@/types/vehicle.types'
 import type { Customer } from '@/types/customer.types'
+import type { ServiceSelectionState } from '@/types/service.types'
 import { vehicleService } from '@/services/vehicle.service'
 import { vehicleCategoryService } from '@/services/vehicleCategory.service'
 import { customerService } from '@/services/customer.service'
 import { VehicleSearch } from '@/components/vehicle/VehicleSearch'
 import { VehicleForm } from '@/components/vehicle/VehicleForm'
+import { ServiceSelector } from '@/components/service/ServiceSelector'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react'
+import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Sparkles } from 'lucide-react'
 
 export function StaffNewTransactionPage() {
   const [searchedRegNumber, setSearchedRegNumber] = useState<string>('')
@@ -20,11 +22,14 @@ export function StaffNewTransactionPage() {
   const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null)
   const [categories, setCategories] = useState<VehicleCategory[]>([])
 
-  // Optional customer update state for existing vehicle
+  // Optional customer update state
   const [showCustomerUpdate, setShowCustomerUpdate] = useState<boolean>(false)
   const [updatePhone, setUpdatePhone] = useState<string>('')
   const [updateName, setUpdateName] = useState<string>('')
   const [updatingCustomer, setUpdatingCustomer] = useState<boolean>(false)
+
+  // Phase 4: Service Selection State
+  const [selectedService, setSelectedService] = useState<ServiceSelectionState | null>(null)
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -40,10 +45,6 @@ export function StaffNewTransactionPage() {
     void loadCategories()
   }, [])
 
-  /**
-   * Search vehicle by normalized registration number.
-   * Single exact-match Firestore query executed ONLY when Staff submits search.
-   */
   const handleSearch = async (normalizedReg: string) => {
     setSearchedRegNumber(normalizedReg)
     setSearching(true)
@@ -51,6 +52,7 @@ export function StaffNewTransactionPage() {
     setErrorMessage(null)
     setFoundVehicle(null)
     setFoundCustomer(null)
+    setSelectedService(null)
     setShowCustomerUpdate(false)
 
     try {
@@ -75,11 +77,12 @@ export function StaffNewTransactionPage() {
     setFoundCustomer(savedCustomer)
   }
 
-  const handleResetSearch = () => {
+  const handleResetAll = () => {
     setSearchedRegNumber('')
     setSearchExecuted(false)
     setFoundVehicle(null)
     setFoundCustomer(null)
+    setSelectedService(null)
     setShowCustomerUpdate(false)
     setErrorMessage(null)
   }
@@ -120,25 +123,26 @@ export function StaffNewTransactionPage() {
     }
   }
 
-  const categoryName = categories.find((c) => c.id === foundVehicle?.categoryId)?.name || 'Unknown Category'
+  const categoryName =
+    categories.find((c) => c.id === foundVehicle?.categoryId)?.name || 'Vehicle Category'
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Customer Registration & Vehicle Lookup</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Front-Desk Service Order</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          Front-Desk Phase 3 Operational Flow &mdash; Search vehicle registration number
+          Phase 4 &mdash; Vehicle Identification, Customer Lookup & Service/Price Selection
         </p>
       </div>
 
-      {/* Step 1: Search Form */}
+      {/* Step 1: Vehicle Search Form */}
       <Card className="border-[hsl(var(--border))]">
         <CardHeader className="pb-4">
           <CardTitle className="text-base flex items-center justify-between">
-            <span>Vehicle Search</span>
+            <span>Step 1: Vehicle Search</span>
             {searchExecuted && (
-              <Button variant="ghost" size="sm" onClick={handleResetSearch} className="h-8 text-xs">
-                <RefreshCw className="h-3.5 w-3.5 mr-1" /> New Search
+              <Button variant="ghost" size="sm" onClick={handleResetAll} className="h-8 text-xs">
+                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reset
               </Button>
             )}
           </CardTitle>
@@ -159,106 +163,145 @@ export function StaffNewTransactionPage() {
       {searchExecuted && (
         <>
           {foundVehicle ? (
-            /* Existing Vehicle Found */
-            <Card className="border-green-200 bg-green-50/30">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-green-700">
-                    <CheckCircle2 className="h-5 w-5" />
-                    <CardTitle className="text-lg">Existing Vehicle Identified</CardTitle>
-                  </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-green-100 text-green-800 rounded-full uppercase tracking-wider">
-                    Found in Database
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
-                  <div>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))] block">Registration Number</span>
-                    <span className="text-base font-bold font-mono tracking-wider">
+            /* Vehicle Identified */
+            <div className="space-y-6">
+              <Card className="border-green-200 bg-green-50/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-green-700">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <CardTitle className="text-lg">Vehicle Identified</CardTitle>
+                    </div>
+                    <span className="text-xs font-semibold px-2.5 py-1 bg-green-100 text-green-800 rounded-full uppercase tracking-wider">
                       {foundVehicle.displayRegistrationNumber}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))] block">Vehicle Category</span>
-                    <span className="text-sm font-semibold">{categoryName}</span>
-                    {foundVehicle.variant && (
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] ml-1">({foundVehicle.variant})</span>
-                    )}
-                  </div>
-                  {foundVehicle.model && (
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
                     <div>
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] block">Vehicle Model</span>
-                      <span className="text-sm font-medium">{foundVehicle.model}</span>
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] block">Vehicle Category</span>
+                      <span className="text-sm font-semibold">{categoryName}</span>
+                      {foundVehicle.variant && (
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] ml-1">({foundVehicle.variant})</span>
+                      )}
                     </div>
-                  )}
-                  <div>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))] block">Customer Account</span>
-                    {foundCustomer ? (
-                      <span className="text-sm font-medium text-[hsl(var(--foreground))]">
-                        {foundCustomer.name || 'Unnamed Customer'} {foundCustomer.phoneNumber ? `(${foundCustomer.phoneNumber})` : ''}
-                      </span>
-                    ) : (
-                      <span className="text-xs italic text-[hsl(var(--muted-foreground))]">
-                        No customer details linked (customerId = null)
-                      </span>
-                    )}
+                    <div>
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] block">Customer Account</span>
+                      {foundCustomer ? (
+                        <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+                          {foundCustomer.name || 'Unnamed Customer'} {foundCustomer.phoneNumber ? `(${foundCustomer.phoneNumber})` : ''}
+                        </span>
+                      ) : (
+                        <span className="text-xs italic text-[hsl(var(--muted-foreground))]">
+                          No customer details linked (customerId = null)
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Customer Update Option */}
-                {!showCustomerUpdate ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setUpdatePhone(foundCustomer?.phoneNumber || '')
-                      setUpdateName(foundCustomer?.name || '')
-                      setShowCustomerUpdate(true)
-                    }}
-                    className="text-xs"
-                  >
-                    <UserIcon className="h-3.5 w-3.5 mr-1" />
-                    {foundCustomer ? 'Update Customer Info' : 'Add Customer Info'}
-                  </Button>
-                ) : (
-                  <form onSubmit={handleSaveCustomerInfo} className="bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))] space-y-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] block">
-                      Associate Customer Info (Optional)
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Input
-                        type="tel"
-                        placeholder="Phone Number"
-                        value={updatePhone}
-                        onChange={(e) => setUpdatePhone(e.target.value)}
-                      />
-                      <Input
-                        type="text"
-                        placeholder="Customer Name"
-                        value={updateName}
-                        onChange={(e) => setUpdateName(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setShowCustomerUpdate(false)}>
-                        Cancel
+                  {!showCustomerUpdate ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setUpdatePhone(foundCustomer?.phoneNumber || '')
+                        setUpdateName(foundCustomer?.name || '')
+                        setShowCustomerUpdate(true)
+                      }}
+                      className="text-xs"
+                    >
+                      <UserIcon className="h-3.5 w-3.5 mr-1" />
+                      {foundCustomer ? 'Update Customer Info' : 'Add Customer Info'}
+                    </Button>
+                  ) : (
+                    <form onSubmit={handleSaveCustomerInfo} className="bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))] space-y-3">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] block">
+                        Associate Customer Info (Optional)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input
+                          type="tel"
+                          placeholder="Phone Number"
+                          value={updatePhone}
+                          onChange={(e) => setUpdatePhone(e.target.value)}
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Customer Name"
+                          value={updateName}
+                          onChange={(e) => setUpdateName(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setShowCustomerUpdate(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" variant="default" size="sm" disabled={updatingCustomer}>
+                          {updatingCustomer ? 'Saving...' : 'Save Customer Info'}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Step 3: Phase 4 Service Package & Pricing Selection */}
+              {!selectedService ? (
+                <ServiceSelector
+                  vehicle={foundVehicle}
+                  categoryName={categoryName}
+                  onSelectionComplete={(selection) => setSelectedService(selection)}
+                />
+              ) : (
+                /* Service Selection Confirmed */
+                <Card className="border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-[hsl(var(--primary))]" />
+                        <CardTitle className="text-lg">Service & Price Selected</CardTitle>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedService(null)} className="h-8 text-xs">
+                        Change Service
                       </Button>
-                      <Button type="submit" variant="default" size="sm" disabled={updatingCustomer}>
-                        {updatingCustomer ? 'Saving...' : 'Save Customer Info'}
-                      </Button>
                     </div>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
+                      <div>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] block">Selected Package</span>
+                        <span className="text-base font-bold">{selectedService.servicePackageName}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] block">Standard Price</span>
+                        <span className="text-base font-semibold">₹{selectedService.standardPrice}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] block">Final Charged Price</span>
+                        <span className="text-lg font-extrabold text-[hsl(var(--primary))]">₹{selectedService.actualPrice}</span>
+                        {selectedService.adjustmentReason && (
+                          <span className="text-[11px] text-[hsl(var(--muted-foreground))] block">
+                            Reason: {selectedService.adjustmentReason}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-md bg-[hsl(var(--secondary))] text-xs text-[hsl(var(--muted-foreground))] flex items-center justify-between">
+                      <span>Phase 4 Service & Price Selection Complete.</span>
+                      <span className="font-semibold">Ready for Phase 5 Transaction Creation</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           ) : (
-            /* New Vehicle Form */
+            /* Register New Vehicle */
             <VehicleForm
               normalizedRegistrationNumber={searchedRegNumber}
               onVehicleSaved={handleVehicleSaved}
-              onCancel={handleResetSearch}
+              onCancel={handleResetAll}
             />
           )}
         </>

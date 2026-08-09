@@ -56,6 +56,20 @@ service cloud.firestore {
       allow read, create, update: if isActiveUser();
       allow delete: if false;
     }
+
+    // Service Packages Security Rules
+    match /servicePackages/{packageId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // Pricing Rules Security Rules
+    match /pricingRules/{ruleId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
     
     // Default deny for all other non-user collections
     match /{document=**} {
