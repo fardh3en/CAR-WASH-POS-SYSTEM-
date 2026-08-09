@@ -140,6 +140,23 @@ service cloud.firestore {
       allow delete: if false;
     }
     
+    // Audit Logs Security Rules (Phase 10 — Append-Only with Identity Verification)
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isActiveUser()
+        && request.resource.data.performedByUserId == request.auth.uid
+        && request.resource.data.performedByUserRole == getUserData().role
+        && request.resource.data.eventType in [
+             'TRANSACTION_CANCELLED',
+             'PAYMENT_REVERSED',
+             'PRICE_CHANGED',
+             'SERVICE_CONFIGURATION_CHANGED'
+           ]
+        && request.resource.data.targetDocumentId is string
+        && request.resource.data.createdAt is string;
+      allow update, delete: if false;
+    }
+
     // Default deny for all other non-user collections
     match /{document=**} {
       allow read, write: if false;

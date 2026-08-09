@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { PaymentRecord, PaymentMethod } from '@/types/transaction.types'
+import { auditService } from './audit.service'
 
 const PAYMENTS_COLLECTION = 'payments'
 const TRANSACTIONS_COLLECTION = 'transactions'
@@ -107,8 +108,9 @@ export const paymentService = {
     paymentId: string
     reversalReason: string
     adminId: string
+    adminName?: string
   }): Promise<void> {
-    const { paymentId, reversalReason, adminId } = data
+    const { paymentId, reversalReason, adminId, adminName } = data
     const reason = reversalReason.trim()
     if (!reason) {
       throw new Error('A mandatory reversal reason must be provided.')
@@ -140,6 +142,21 @@ export const paymentService = {
           throw new Error('Only COMPLETED / PAID transactions can be reversed by Admin.')
         }
 
+        // Prepare audit record helper
+        const { docRef: auditRef, record: auditRec } = auditService.prepareAuditRecord({
+          eventType: 'PAYMENT_REVERSED',
+          targetDocumentId: paymentId,
+          targetReference: paymentData.transactionNumber || paymentData.transactionId,
+          performedByUserId: adminId,
+          performedByUserName: adminName || 'Administrator',
+          performedByUserRole: 'ADMIN',
+          reason,
+          metadata: {
+            amount: paymentData.amount,
+            paymentMethod: paymentData.paymentMethod,
+          },
+        })
+
         // Mark payment record reversed
         transaction.update(paymentDocRef, {
           isReversed: true,
@@ -157,6 +174,9 @@ export const paymentService = {
           paidAt: deleteField(),
           updatedAt: now,
         })
+
+        // Write audit log atomically inside the same transaction
+        transaction.set(auditRef, auditRec)
       })
     } catch (error) {
       console.error('Error reversing payment atomically:', error)

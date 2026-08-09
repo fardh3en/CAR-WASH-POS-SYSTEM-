@@ -1,6 +1,7 @@
-import { collection, getDocs, doc, setDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, query, where, runTransaction } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { PricingRule } from '@/types/service.types'
+import { auditService } from './audit.service'
 
 const COLLECTION_NAME = 'pricingRules'
 
@@ -78,32 +79,57 @@ export const pricingService = {
   /**
    * Create or update standard price rule in whole rupees (Admin only).
    * Changes apply ONLY to future transactions.
+   * Atomic runTransaction: writes pricing rule and PRICE_CHANGED audit log together.
    */
   async setStandardPriceRule(
     categoryId: string,
     servicePackageId: string,
     price: number,
-    variant?: string
+    variant?: string,
+    performedBy?: { userId: string; userName: string; userRole: 'ADMIN' | 'STAFF' }
   ): Promise<void> {
     const wholeRupees = Math.max(0, Math.round(price))
     const ruleId = generatePricingRuleId(categoryId, servicePackageId, variant)
     const docRef = doc(db, COLLECTION_NAME, ruleId)
 
     const now = new Date().toISOString()
-    const ruleData: PricingRule = {
-      id: ruleId,
-      vehicleCategoryId: categoryId,
-      servicePackageId,
-      variant: variant?.trim() || undefined,
-      price: wholeRupees,
-      isActive: true,
-      effectiveFrom: now,
-      createdAt: now,
-      updatedAt: now,
-    }
 
     try {
-      await setDoc(docRef, ruleData)
+      await runTransaction(db, async (t) => {
+        const snap = await t.get(docRef)
+        const oldPrice = snap.exists() ? (snap.data() as PricingRule).price : null
+
+        const ruleData: PricingRule = {
+          id: ruleId,
+          vehicleCategoryId: categoryId,
+          servicePackageId,
+          variant: variant?.trim() || undefined,
+          price: wholeRupees,
+          isActive: true,
+          effectiveFrom: now,
+          createdAt: snap.exists() ? (snap.data() as PricingRule).createdAt : now,
+          updatedAt: now,
+        }
+
+        const { docRef: auditRef, record: auditRec } = auditService.prepareAuditRecord({
+          eventType: 'PRICE_CHANGED',
+          targetDocumentId: ruleId,
+          targetReference: `${categoryId} / ${servicePackageId}${variant ? ' (' + variant + ')' : ''}`,
+          performedByUserId: performedBy?.userId || 'system_admin',
+          performedByUserName: performedBy?.userName || 'Administrator',
+          performedByUserRole: performedBy?.userRole || 'ADMIN',
+          metadata: {
+            vehicleCategoryId: categoryId,
+            servicePackageId,
+            variant: variant || '—',
+            oldPrice: oldPrice !== null ? oldPrice : 'UNCONFIGURED',
+            newPrice: wholeRupees,
+          },
+        })
+
+        t.set(docRef, ruleData)
+        t.set(auditRef, auditRec)
+      })
     } catch (error) {
       console.error(`Error saving pricing rule ${ruleId}:`, error)
       throw error

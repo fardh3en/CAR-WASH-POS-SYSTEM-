@@ -7,6 +7,7 @@ import {
   Sparkles,
   Tag,
   BarChart3,
+  ShieldCheck,
   Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -19,6 +20,7 @@ const navItems = [
   { label: 'Services', path: '/admin/services', icon: Sparkles },
   { label: 'Pricing', path: '/admin/pricing', icon: Tag },
   { label: 'Reports', path: '/admin/reports', icon: BarChart3 },
+  { label: 'Audit Trail', path: '/admin/audit', icon: ShieldCheck },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
 ]
 

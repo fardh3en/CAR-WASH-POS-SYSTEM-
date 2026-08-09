@@ -1,6 +1,7 @@
-import { collection, getDocs, doc, setDoc, updateDoc, query, where, orderBy } from 'firebase/firestore'
+import { collection, getDocs, doc, setDoc, query, where, orderBy, runTransaction } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { ServicePackage } from '@/types/service.types'
+import { auditService } from './audit.service'
 
 const COLLECTION_NAME = 'servicePackages'
 
@@ -98,14 +99,45 @@ export const servicePackageService = {
   },
 
   /**
-   * Update service package information (Admin only)
+   * Update service package information (Admin only).
+   * Atomic runTransaction: updates service package and writes SERVICE_CONFIGURATION_CHANGED audit log.
    */
-  async updateServicePackage(id: string, updates: Partial<ServicePackage>): Promise<void> {
+  async updateServicePackage(
+    id: string,
+    updates: Partial<ServicePackage>,
+    performedBy?: { userId: string; userName: string; userRole: 'ADMIN' | 'STAFF' }
+  ): Promise<void> {
+    const docRef = doc(db, COLLECTION_NAME, id)
+    const now = new Date().toISOString()
+
     try {
-      const docRef = doc(db, COLLECTION_NAME, id)
-      await updateDoc(docRef, {
-        ...updates,
-        updatedAt: new Date().toISOString(),
+      await runTransaction(db, async (t) => {
+        const snap = await t.get(docRef)
+        if (!snap.exists()) {
+          throw new Error('Service package not found.')
+        }
+
+        const pkgData = snap.data() as ServicePackage
+        const updatedPackageData = {
+          ...updates,
+          updatedAt: now,
+        }
+
+        const { docRef: auditRef, record: auditRec } = auditService.prepareAuditRecord({
+          eventType: 'SERVICE_CONFIGURATION_CHANGED',
+          targetDocumentId: id,
+          targetReference: pkgData.name || id,
+          performedByUserId: performedBy?.userId || 'system_admin',
+          performedByUserName: performedBy?.userName || 'Administrator',
+          performedByUserRole: performedBy?.userRole || 'ADMIN',
+          metadata: {
+            packageName: pkgData.name,
+            updatedFields: Object.keys(updates).join(', '),
+          },
+        })
+
+        t.update(docRef, updatedPackageData)
+        t.set(auditRef, auditRec)
       })
     } catch (error) {
       console.error(`Error updating service package ${id}:`, error)

@@ -16,6 +16,7 @@ import { AdminTransactionsPage } from '@/pages/admin/TransactionsPage'
 import { AdminServicesPage } from '@/pages/admin/ServicesPage'
 import { AdminPricingPage } from '@/pages/admin/PricingPage'
 import { AdminReportsPage } from '@/pages/admin/ReportsPage'
+import { AdminAuditLogsPage } from '@/pages/admin/AuditLogsPage'
 import { AdminSettingsPage } from '@/pages/admin/SettingsPage'
 
 import { StaffNewTransactionPage } from '@/pages/staff/NewTransactionPage'
@@ -46,6 +47,7 @@ export default function App() {
                 <Route path="services" element={<AdminServicesPage />} />
                 <Route path="pricing" element={<AdminPricingPage />} />
                 <Route path="reports" element={<AdminReportsPage />} />
+                <Route path="audit" element={<AdminAuditLogsPage />} />
                 <Route path="settings" element={<AdminSettingsPage />} />
               </Route>
             </Route>

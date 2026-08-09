@@ -8,7 +8,7 @@ import {
   where,
   orderBy,
   limit,
-  updateDoc,
+  runTransaction,
 } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type {
@@ -21,6 +21,7 @@ import type {
 } from '@/types/transaction.types'
 import { transactionCounterService } from './transactionCounter.service'
 import { normalizeRegistrationNumber } from '@/utils/vehicle.utils'
+import { auditService } from './audit.service'
 
 const COLLECTION_NAME = 'transactions'
 
@@ -128,22 +129,62 @@ export const transactionService = {
   },
 
   /**
-   * Controlled Order Cancellation Flow.
+   * Controlled Order Cancellation Flow (100% Atomic).
    * Updates ONLY status -> 'CANCELLED', cancellationReason, and updatedAt.
+   * Creates TRANSACTION_CANCELLED audit record atomically in the same runTransaction.
    * Snapshot fields remain completely untouched.
    */
-  async cancelTransaction(id: string, cancellationReason: string): Promise<void> {
+  async cancelTransaction(
+    id: string,
+    cancellationReason: string,
+    performedBy?: { userId: string; userName: string; userRole: 'ADMIN' | 'STAFF' }
+  ): Promise<void> {
     const reason = cancellationReason.trim()
     if (!reason) {
       throw new Error('A mandatory cancellation reason must be provided.')
     }
 
+    const docRef = doc(db, COLLECTION_NAME, id)
+    const now = new Date().toISOString()
+
     try {
-      const docRef = doc(db, COLLECTION_NAME, id)
-      await updateDoc(docRef, {
-        status: 'CANCELLED',
-        cancellationReason: reason,
-        updatedAt: new Date().toISOString(),
+      await runTransaction(db, async (t) => {
+        const snap = await t.get(docRef)
+        if (!snap.exists()) {
+          throw new Error('Transaction record not found.')
+        }
+
+        const txData = snap.data() as Transaction
+        if (txData.status !== 'OPEN') {
+          throw new Error('Only OPEN transactions can be cancelled.')
+        }
+
+        // Prepare audit record helper
+        const { docRef: auditRef, record: auditRec } = auditService.prepareAuditRecord({
+          eventType: 'TRANSACTION_CANCELLED',
+          targetDocumentId: id,
+          targetReference: txData.transactionNumber || id,
+          performedByUserId: performedBy?.userId || txData.staffSnapshot.staffId,
+          performedByUserName: performedBy?.userName || txData.staffSnapshot.staffName,
+          performedByUserRole: performedBy?.userRole || 'STAFF',
+          reason,
+          metadata: {
+            vehicleRegistration: txData.vehicleSnapshot.registrationNumber,
+            servicePackageName: txData.servicePackageSnapshot.name,
+            standardPrice: txData.pricingSnapshot.standardPrice,
+            actualPrice: txData.pricingSnapshot.actualPrice,
+          },
+        })
+
+        // Update transaction status (restricted by firestore.rules to status, cancellationReason, updatedAt)
+        t.update(docRef, {
+          status: 'CANCELLED',
+          cancellationReason: reason,
+          updatedAt: now,
+        })
+
+        // Write audit record atomically inside the same transaction
+        t.set(auditRef, auditRec)
       })
     } catch (error) {
       console.error(`Error cancelling transaction ${id}:`, error)
