@@ -4,10 +4,12 @@ import type { Transaction } from '@/types/transaction.types'
 import { transactionService } from '@/services/transaction.service'
 import { VehicleSearch } from '@/components/vehicle/VehicleSearch'
 import { PaymentModal } from '@/components/payment/PaymentModal'
+import { ReceiptModal } from '@/components/receipt/ReceiptModal'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { History, RefreshCw, AlertCircle, Ban, CreditCard } from 'lucide-react'
+import { History, RefreshCw, AlertCircle, Ban, CreditCard, Receipt, MessageCircle } from 'lucide-react'
+import { formatPhoneForWhatsApp, buildWhatsAppMessage, generateWhatsAppUrl } from '@/utils/receipt.utils'
 
 export function StaffHistoryPage() {
   const { user, userProfile } = useAuth()
@@ -19,6 +21,9 @@ export function StaffHistoryPage() {
 
   // Payment Modal state
   const [payingTx, setPayingTx] = useState<Transaction | null>(null)
+
+  // Phase 7: Receipt Modal state
+  const [receiptTx, setReceiptTx] = useState<Transaction | null>(null)
 
   // Cancel order modal state
   const [cancellingTx, setCancellingTx] = useState<Transaction | null>(null)
@@ -89,6 +94,19 @@ export function StaffHistoryPage() {
     }
   }
 
+  /**
+   * Phase 7: Build WhatsApp URL for a transaction.
+   * Returns null if transaction is not COMPLETED+PAID or phone is invalid.
+   * (Refinements 1 & 3)
+   */
+  const getWhatsAppUrl = (tx: Transaction): string | null => {
+    if (tx.status !== 'COMPLETED' || tx.paymentStatus !== 'PAID') return null
+    const phone = formatPhoneForWhatsApp(tx.customerSnapshot.phoneNumber)
+    if (!phone) return null
+    const message = buildWhatsAppMessage(tx)
+    return generateWhatsAppUrl(phone, message)
+  }
+
   const displayedList = searchResults !== null ? searchResults : recentTransactions
 
   return (
@@ -145,105 +163,152 @@ export function StaffHistoryPage() {
             </p>
           ) : (
             <div className="space-y-3">
-              {displayedList.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="p-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] space-y-3"
-                >
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-[hsl(var(--border))] pb-2">
-                    <div>
-                      <span className="text-sm font-mono font-extrabold text-[hsl(var(--primary))] block">
-                        {tx.transactionNumber}
-                      </span>
-                      <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                        Arrived: {new Date(tx.vehicleArrivedAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                          tx.status === 'COMPLETED'
-                            ? 'bg-green-100 text-green-800'
-                            : tx.status === 'CANCELLED'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}
-                      >
-                        {tx.status}
-                      </span>
-                      <span
-                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                          tx.paymentStatus === 'PAID' ? 'bg-green-600 text-white' : 'bg-amber-500 text-white'
-                        }`}
-                      >
-                        {tx.paymentStatus || 'UNPAID'}
-                      </span>
+              {displayedList.map((tx) => {
+                const whatsAppUrl = getWhatsAppUrl(tx)
 
-                      {/* Payment Collection Action for OPEN orders */}
-                      {tx.status === 'OPEN' && tx.paymentStatus !== 'PAID' && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => setPayingTx(tx)}
-                          className="h-7 text-xs bg-green-600 hover:bg-green-700 font-bold"
-                        >
-                          <CreditCard className="h-3 w-3 mr-1" /> Pay ₹{tx.pricingSnapshot.actualPrice}
-                        </Button>
-                      )}
-
-                      {/* Cancel Order Action */}
-                      {tx.status === 'OPEN' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setCancellingTx(tx)
-                            setCancellationReason('')
-                          }}
-                          className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                        >
-                          <Ban className="h-3 w-3 mr-1" /> Cancel
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <span className="text-[hsl(var(--muted-foreground))] block">Vehicle</span>
-                      <span className="font-bold font-mono">
-                        {tx.vehicleSnapshot.displayRegistrationNumber}
-                      </span>
-                      <span className="text-[hsl(var(--muted-foreground))] block text-[11px]">
-                        {tx.vehicleSnapshot.categoryName} {tx.vehicleSnapshot.variant ? `(${tx.vehicleSnapshot.variant})` : ''}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[hsl(var(--muted-foreground))] block">Service Package</span>
-                      <span className="font-semibold text-sm">
-                        {tx.servicePackageSnapshot.name}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[hsl(var(--muted-foreground))] block">Charged Amount</span>
-                      <span className="font-extrabold text-sm text-[hsl(var(--primary))]">
-                        ₹{tx.pricingSnapshot.actualPrice}
-                      </span>
-                      {tx.paymentMethod && (
-                        <span className="text-[11px] font-semibold text-green-700 block">
-                          Paid via {tx.paymentMethod}
+                return (
+                  <div
+                    key={tx.id}
+                    className="p-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-[hsl(var(--border))] pb-2">
+                      <div>
+                        <span className="text-sm font-mono font-extrabold text-[hsl(var(--primary))] block">
+                          {tx.transactionNumber}
                         </span>
-                      )}
-                    </div>
-                  </div>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                          Arrived: {new Date(tx.vehicleArrivedAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                            tx.status === 'COMPLETED'
+                              ? 'bg-green-100 text-green-800'
+                              : tx.status === 'CANCELLED'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {tx.status}
+                        </span>
+                        <span
+                          className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                            tx.paymentStatus === 'PAID' ? 'bg-green-600 text-white' : 'bg-amber-500 text-white'
+                          }`}
+                        >
+                          {tx.paymentStatus || 'UNPAID'}
+                        </span>
 
-                  {tx.status === 'CANCELLED' && tx.cancellationReason && (
-                    <div className="p-2 rounded bg-red-50 border border-red-200 text-xs text-red-800">
-                      <span className="font-bold">Cancellation Reason:</span> {tx.cancellationReason}
+                        {/* Payment Collection Action for OPEN orders */}
+                        {tx.status === 'OPEN' && tx.paymentStatus !== 'PAID' && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => setPayingTx(tx)}
+                            className="h-7 text-xs bg-green-600 hover:bg-green-700 font-bold"
+                          >
+                            <CreditCard className="h-3 w-3 mr-1" /> Pay ₹{tx.pricingSnapshot.actualPrice}
+                          </Button>
+                        )}
+
+                        {/* Phase 7: Print Order Summary for OPEN, Print Receipt for COMPLETED (Refinement 2) */}
+                        {tx.status === 'OPEN' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setReceiptTx(tx)}
+                            className="h-7 text-xs gap-1"
+                          >
+                            <Receipt className="h-3 w-3" /> Print Order Summary
+                          </Button>
+                        )}
+                        {tx.status === 'COMPLETED' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setReceiptTx(tx)}
+                            className="h-7 text-xs gap-1"
+                          >
+                            <Receipt className="h-3 w-3" /> Print Receipt
+                          </Button>
+                        )}
+
+                        {/* Phase 7: WhatsApp E-Bill — ONLY for COMPLETED+PAID (Refinement 1) */}
+                        {tx.status === 'COMPLETED' && tx.paymentStatus === 'PAID' && (
+                          whatsAppUrl ? (
+                            <a
+                              href={whatsAppUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 h-7 px-2 text-xs font-semibold rounded-md bg-green-500 hover:bg-green-600 text-white"
+                            >
+                              <MessageCircle className="h-3 w-3" /> WhatsApp
+                            </a>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 h-7 px-2 text-xs font-semibold rounded-md bg-gray-100 text-gray-400 cursor-not-allowed"
+                              title="Customer phone number not provided or invalid (expected: 98765-43210)"
+                            >
+                              <MessageCircle className="h-3 w-3" /> WhatsApp
+                            </span>
+                          )
+                        )}
+
+                        {/* Cancel Order Action */}
+                        {tx.status === 'OPEN' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setCancellingTx(tx)
+                              setCancellationReason('')
+                            }}
+                            className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                          >
+                            <Ban className="h-3 w-3 mr-1" /> Cancel
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-[hsl(var(--muted-foreground))] block">Vehicle</span>
+                        <span className="font-bold font-mono">
+                          {tx.vehicleSnapshot.displayRegistrationNumber}
+                        </span>
+                        <span className="text-[hsl(var(--muted-foreground))] block text-[11px]">
+                          {tx.vehicleSnapshot.categoryName} {tx.vehicleSnapshot.variant ? `(${tx.vehicleSnapshot.variant})` : ''}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[hsl(var(--muted-foreground))] block">Service Package</span>
+                        <span className="font-semibold text-sm">
+                          {tx.servicePackageSnapshot.name}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[hsl(var(--muted-foreground))] block">Charged Amount</span>
+                        <span className="font-extrabold text-sm text-[hsl(var(--primary))]">
+                          ₹{tx.pricingSnapshot.actualPrice}
+                        </span>
+                        {tx.paymentMethod && (
+                          <span className="text-[11px] font-semibold text-green-700 block">
+                            Paid via {tx.paymentMethod}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {tx.status === 'CANCELLED' && tx.cancellationReason && (
+                      <div className="p-2 rounded bg-red-50 border border-red-200 text-xs text-red-800">
+                        <span className="font-bold">Cancellation Reason:</span> {tx.cancellationReason}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </CardContent>
@@ -263,6 +328,14 @@ export function StaffHistoryPage() {
             }
           }}
           onClose={() => setPayingTx(null)}
+        />
+      )}
+
+      {/* Phase 7: Receipt Modal */}
+      {receiptTx && (
+        <ReceiptModal
+          transaction={receiptTx}
+          onClose={() => setReceiptTx(null)}
         />
       )}
 

@@ -3,10 +3,11 @@ import { useAuth } from '@/hooks/useAuth'
 import type { Transaction, PaymentRecord } from '@/types/transaction.types'
 import { transactionService } from '@/services/transaction.service'
 import { paymentService } from '@/services/payment.service'
+import { ReceiptModal } from '@/components/receipt/ReceiptModal'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { FileText, Search, Eye, Filter, RotateCcw, AlertCircle } from 'lucide-react'
+import { FileText, Search, Eye, Filter, RotateCcw, AlertCircle, Printer } from 'lucide-react'
 
 export function AdminTransactionsPage() {
   const { user } = useAuth()
@@ -27,6 +28,9 @@ export function AdminTransactionsPage() {
   const [reversalReasonInput, setReversalReasonInput] = useState<string>('')
   const [executingReversal, setExecutingReversal] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  // Phase 7: Receipt Modal State
+  const [receiptTx, setReceiptTx] = useState<Transaction | null>(null)
 
   useEffect(() => {
     void loadTransactions()
@@ -383,6 +387,21 @@ export function AdminTransactionsPage() {
                 </div>
               )}
 
+              {/* Phase 7: Print Receipt / Print Order Summary — adapts to status (Refinement 2) */}
+              {selectedTx.status !== 'CANCELLED' && (
+                <div className="pt-2 border-t border-[hsl(var(--border))] mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setReceiptTx(selectedTx)}
+                    className="gap-1.5 text-xs"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    {selectedTx.status === 'COMPLETED' ? 'Print Receipt' : 'Print Order Summary'}
+                  </Button>
+                </div>
+              )}
+
               <div className="flex justify-end pt-2">
                 <Button variant="outline" onClick={() => setSelectedTx(null)}>
                   Close Details
@@ -391,6 +410,14 @@ export function AdminTransactionsPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Phase 7: Receipt Modal */}
+      {receiptTx && (
+        <ReceiptModal
+          transaction={receiptTx}
+          onClose={() => setReceiptTx(null)}
+        />
       )}
     </div>
   )

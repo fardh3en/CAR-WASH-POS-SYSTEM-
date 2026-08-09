@@ -13,10 +13,11 @@ import { VehicleSearch } from '@/components/vehicle/VehicleSearch'
 import { VehicleForm } from '@/components/vehicle/VehicleForm'
 import { ServiceSelector } from '@/components/service/ServiceSelector'
 import { PaymentModal } from '@/components/payment/PaymentModal'
+import { ReceiptModal } from '@/components/receipt/ReceiptModal'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Clock, FileCheck, CreditCard } from 'lucide-react'
+import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Clock, FileCheck, CreditCard, Receipt } from 'lucide-react'
 
 export function StaffNewTransactionPage() {
   const { user, userProfile } = useAuth()
@@ -47,6 +48,9 @@ export function StaffNewTransactionPage() {
   // Phase 6: Payment Modal State
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false)
 
+  // Phase 7: Receipt Modal State
+  const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false)
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -75,6 +79,7 @@ export function StaffNewTransactionPage() {
     setSelectedService(null)
     setCreatedTransaction(null)
     setShowPaymentModal(false)
+    setShowReceiptModal(false)
     setShowCustomerUpdate(false)
 
     try {
@@ -107,6 +112,7 @@ export function StaffNewTransactionPage() {
     setSelectedService(null)
     setCreatedTransaction(null)
     setShowPaymentModal(false)
+    setShowReceiptModal(false)
     setShowCustomerUpdate(false)
     setExpectedPickup('')
     setErrorMessage(null)
@@ -506,22 +512,42 @@ export function StaffNewTransactionPage() {
             {/* Payment Actions */}
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2">
               {createdTransaction.status === 'OPEN' && createdTransaction.paymentStatus !== 'PAID' ? (
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <Button
                     variant="default"
                     size="lg"
                     onClick={() => setShowPaymentModal(true)}
-                    className="font-bold bg-green-600 hover:bg-green-700 w-full sm:w-auto"
+                    className="font-bold bg-green-600 hover:bg-green-700"
                   >
                     <CreditCard className="h-4 w-4 mr-2" /> Collect Payment Now (₹{createdTransaction.pricingSnapshot.actualPrice})
                   </Button>
-                  <Button variant="outline" size="lg" onClick={handleResetAll} className="w-full sm:w-auto">
+                  {/* Phase 7: Print Order Summary for OPEN transactions (Refinement 2) */}
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => setShowReceiptModal(true)}
+                    className="gap-1.5"
+                  >
+                    <Receipt className="h-4 w-4" /> Print Order Summary
+                  </Button>
+                  <Button variant="outline" size="lg" onClick={handleResetAll}>
                     Pay Later
                   </Button>
                 </div>
               ) : (
-                <div className="text-xs text-green-700 font-semibold flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4" /> Payment recorded successfully. Transaction completed.
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-xs text-green-700 font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4" /> Payment recorded successfully. Transaction completed.
+                  </div>
+                  {/* Phase 7: Print Receipt for COMPLETED transactions (Refinement 2) */}
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => setShowReceiptModal(true)}
+                    className="gap-1.5"
+                  >
+                    <Receipt className="h-4 w-4" /> Print Receipt
+                  </Button>
                 </div>
               )}
 
@@ -549,6 +575,14 @@ export function StaffNewTransactionPage() {
             })
           }}
           onClose={() => setShowPaymentModal(false)}
+        />
+      )}
+
+      {/* Phase 7: Receipt Modal */}
+      {showReceiptModal && createdTransaction && (
+        <ReceiptModal
+          transaction={createdTransaction}
+          onClose={() => setShowReceiptModal(false)}
         />
       )}
     </div>
