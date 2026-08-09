@@ -79,15 +79,48 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Transactions Security Rules (Strict Field-Diff Cancellation Protection)
+    // Transactions Security Rules (Strict Field-Diff Protection for Cancellation & Payment Completion)
     match /transactions/{transactionId} {
       allow read, create: if isActiveUser();
-      allow update: if isActiveUser()
-        && resource.data.status == 'OPEN'
-        && request.resource.data.status == 'CANCELLED'
-        && request.resource.data.cancellationReason is string
-        && request.resource.data.cancellationReason.size() > 0
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancellationReason', 'updatedAt']);
+      allow update: if isActiveUser() && (
+        // Case 1: Cancellation (Phase 5)
+        (resource.data.status == 'OPEN'
+         && request.resource.data.status == 'CANCELLED'
+         && request.resource.data.cancellationReason is string
+         && request.resource.data.cancellationReason.size() > 0
+         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancellationReason', 'updatedAt']))
+        ||
+        // Case 2: Atomic Payment Completion (Phase 6)
+        (resource.data.status == 'OPEN'
+         && resource.data.paymentStatus == 'UNPAID'
+         && request.resource.data.status == 'COMPLETED'
+         && request.resource.data.paymentStatus == 'PAID'
+         && request.resource.data.paidAmount == resource.data.pricingSnapshot.actualPrice
+         && request.resource.data.paymentMethod in ['CASH', 'UPI']
+         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'paymentStatus', 'paidAmount', 'paymentMethod', 'paidAt', 'updatedAt']))
+        ||
+        // Case 3: Admin Payment Reversal (Phase 6)
+        (isAdmin()
+         && resource.data.status == 'COMPLETED'
+         && resource.data.paymentStatus == 'PAID'
+         && request.resource.data.status == 'OPEN'
+         && request.resource.data.paymentStatus == 'UNPAID'
+         && request.resource.data.paidAmount == 0
+         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'paymentStatus', 'paidAmount', 'paymentMethod', 'paidAt', 'updatedAt']))
+      );
+      allow delete: if false;
+    }
+
+    // Payments Collection Security Rules (Phase 6 Audit Log)
+    match /payments/{paymentId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser() && request.resource.data.amount > 0 && request.resource.data.paymentMethod in ['CASH', 'UPI'];
+      allow update: if isAdmin()
+        && resource.data.isReversed != true
+        && request.resource.data.isReversed == true
+        && request.resource.data.reversalReason is string
+        && request.resource.data.reversalReason.size() > 0
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isReversed', 'reversedAt', 'reversedByAdminId', 'reversalReason']);
       allow delete: if false;
     }
     

@@ -12,10 +12,11 @@ import { transactionService } from '@/services/transaction.service'
 import { VehicleSearch } from '@/components/vehicle/VehicleSearch'
 import { VehicleForm } from '@/components/vehicle/VehicleForm'
 import { ServiceSelector } from '@/components/service/ServiceSelector'
+import { PaymentModal } from '@/components/payment/PaymentModal'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Clock, FileCheck } from 'lucide-react'
+import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Clock, FileCheck, CreditCard } from 'lucide-react'
 
 export function StaffNewTransactionPage() {
   const { user, userProfile } = useAuth()
@@ -42,6 +43,9 @@ export function StaffNewTransactionPage() {
   const [expectedPickup, setExpectedPickup] = useState<string>('')
   const [creatingOrder, setCreatingOrder] = useState<boolean>(false)
   const [createdTransaction, setCreatedTransaction] = useState<Transaction | null>(null)
+
+  // Phase 6: Payment Modal State
+  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false)
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -70,6 +74,7 @@ export function StaffNewTransactionPage() {
     setFoundCustomer(null)
     setSelectedService(null)
     setCreatedTransaction(null)
+    setShowPaymentModal(false)
     setShowCustomerUpdate(false)
 
     try {
@@ -101,6 +106,7 @@ export function StaffNewTransactionPage() {
     setFoundCustomer(null)
     setSelectedService(null)
     setCreatedTransaction(null)
+    setShowPaymentModal(false)
     setShowCustomerUpdate(false)
     setExpectedPickup('')
     setErrorMessage(null)
@@ -142,9 +148,6 @@ export function StaffNewTransactionPage() {
     }
   }
 
-  /**
-   * Phase 5 Order Creation: Constructs immutable snapshots and writes to Firestore
-   */
   const handleCreateOrder = async () => {
     if (!foundVehicle || !selectedService || !user || !userProfile) {
       setErrorMessage('Cannot create order: missing vehicle, service selection, or staff session.')
@@ -163,7 +166,6 @@ export function StaffNewTransactionPage() {
       const category = categories.find((c) => c.id === foundVehicle.categoryId)
       const pkgObj = servicePackages.find((p) => p.id === selectedService.servicePackageId)
 
-      // Construct immutable snapshots
       const vehicleSnap = {
         vehicleId: foundVehicle.id,
         registrationNumber: foundVehicle.registrationNumber,
@@ -196,7 +198,6 @@ export function StaffNewTransactionPage() {
         adjustmentReason: selectedService.adjustmentReason,
       }
 
-      // Staff Snapshot from Auth Session (Never form input!)
       const staffSnap = {
         staffId: user.uid,
         staffName: userProfile.displayName || user.email || 'Staff Member',
@@ -229,7 +230,7 @@ export function StaffNewTransactionPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Front-Desk Service Order</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          Create operational sales record with immutable snapshots
+          Create sales order and collect payment
         </p>
       </div>
 
@@ -388,7 +389,6 @@ export function StaffNewTransactionPage() {
                       </div>
                     </div>
 
-                    {/* Optional Expected Pickup Time Input */}
                     <div className="space-y-1.5 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
                       <label htmlFor="pickupTime" className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--foreground))] flex items-center gap-1.5">
                         <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
@@ -401,9 +401,6 @@ export function StaffNewTransactionPage() {
                         value={expectedPickup}
                         onChange={(e) => setExpectedPickup(e.target.value)}
                       />
-                      <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
-                        For vehicles staying hours or days. Represents customer's expected return time.
-                      </p>
                     </div>
 
                     <div className="flex items-center justify-end pt-2">
@@ -433,18 +430,29 @@ export function StaffNewTransactionPage() {
         </>
       )}
 
-      {/* Step 4: Created Order Confirmation */}
+      {/* Step 4: Created Order Confirmation & Phase 6 Payment Action */}
       {createdTransaction && (
         <Card className="border-green-300 bg-green-50 shadow-lg">
           <CardHeader className="pb-3 text-center sm:text-left">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-green-800">
                 <CheckCircle2 className="h-6 w-6" />
-                <CardTitle className="text-xl font-bold">Order Created Successfully</CardTitle>
+                <CardTitle className="text-xl font-bold">
+                  {createdTransaction.status === 'COMPLETED' ? 'Order Paid & Completed' : 'Order Created Successfully'}
+                </CardTitle>
               </div>
-              <span className="text-xs font-mono font-bold bg-green-200 text-green-900 px-3 py-1 rounded-full uppercase tracking-wider">
-                Status: {createdTransaction.status}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold bg-green-200 text-green-900 px-3 py-1 rounded-full uppercase tracking-wider">
+                  Status: {createdTransaction.status}
+                </span>
+                <span
+                  className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                    createdTransaction.paymentStatus === 'PAID' ? 'bg-green-600 text-white' : 'bg-amber-500 text-white'
+                  }`}
+                >
+                  {createdTransaction.paymentStatus}
+                </span>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -486,27 +494,62 @@ export function StaffNewTransactionPage() {
                   <span className="font-extrabold text-sm text-[hsl(var(--primary))]">
                     ₹{createdTransaction.pricingSnapshot.actualPrice}
                   </span>
-                  {createdTransaction.pricingSnapshot.adjustmentReason && (
-                    <span className="text-[10px] text-[hsl(var(--muted-foreground))] block">
-                      ({createdTransaction.pricingSnapshot.adjustmentReason})
+                  {createdTransaction.paymentMethod && (
+                    <span className="text-xs font-bold text-green-700 block">
+                      Paid via {createdTransaction.paymentMethod}
                     </span>
                   )}
                 </div>
               </div>
-
-              <div className="pt-2 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-                <span>Created by: {createdTransaction.staffSnapshot.staffName}</span>
-                <span>Arrived: {new Date(createdTransaction.vehicleArrivedAt).toLocaleTimeString()}</span>
-              </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="default" onClick={handleResetAll}>
+            {/* Payment Actions */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2">
+              {createdTransaction.status === 'OPEN' && createdTransaction.paymentStatus !== 'PAID' ? (
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    variant="default"
+                    size="lg"
+                    onClick={() => setShowPaymentModal(true)}
+                    className="font-bold bg-green-600 hover:bg-green-700 w-full sm:w-auto"
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" /> Collect Payment Now (₹{createdTransaction.pricingSnapshot.actualPrice})
+                  </Button>
+                  <Button variant="outline" size="lg" onClick={handleResetAll} className="w-full sm:w-auto">
+                    Pay Later
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-xs text-green-700 font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4" /> Payment recorded successfully. Transaction completed.
+                </div>
+              )}
+
+              <Button variant="ghost" onClick={handleResetAll}>
                 Start New Transaction
               </Button>
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && createdTransaction && user && userProfile && (
+        <PaymentModal
+          transaction={createdTransaction}
+          staffId={user.uid}
+          staffName={userProfile.displayName || user.email || 'Staff Member'}
+          onPaymentSuccess={() => {
+            setShowPaymentModal(false)
+            setCreatedTransaction({
+              ...createdTransaction,
+              status: 'COMPLETED',
+              paymentStatus: 'PAID',
+              paidAmount: createdTransaction.pricingSnapshot.actualPrice,
+            })
+          }}
+          onClose={() => setShowPaymentModal(false)}
+        />
       )}
     </div>
   )

@@ -1,4 +1,6 @@
-export type TransactionStatus = 'OPEN' | 'CANCELLED'
+export type TransactionStatus = 'OPEN' | 'CANCELLED' | 'COMPLETED'
+export type PaymentStatus = 'UNPAID' | 'PAID'
+export type PaymentMethod = 'CASH' | 'UPI'
 
 export interface VehicleSnapshot {
   vehicleId: string
@@ -41,18 +43,41 @@ export interface Transaction {
   transactionNumber: string // Concurrency-safe format e.g. TRX-20260809-0001
   status: TransactionStatus
 
-  // Immutable Snapshots
+  // Immutable Snapshots (Phase 5)
   vehicleSnapshot: VehicleSnapshot
   customerSnapshot: CustomerSnapshot
   servicePackageSnapshot: ServicePackageSnapshot
   pricingSnapshot: PricingSnapshot
   staffSnapshot: StaffSnapshot
 
-  // Time & Operations
+  // Time & Operations (Phase 5)
   vehicleArrivedAt: string // ISO timestamp when vehicle arrived
   expectedPickupAt?: string // Optional ISO timestamp for customer pickup time
   cancellationReason?: string
 
+  // Payment Tracking (Phase 6)
+  paymentStatus: PaymentStatus
+  paidAmount: number // Total rupees collected (equals actualPrice when paid)
+  paymentMethod?: PaymentMethod
+  paidAt?: string // ISO timestamp of payment completion
+
   createdAt: string
   updatedAt: string
+}
+
+export interface PaymentRecord {
+  id: string // Firestore doc ID in `payments` collection
+  transactionId: string
+  transactionNumber: string
+  amount: number // Whole rupees (INR ₹) - equals actualPrice
+  paymentMethod: PaymentMethod
+  upiReferenceNumber?: string // Optional reference ID for UPI
+  notes?: string
+  recordedByStaffId: string
+  recordedByStaffName: string
+  recordedAt: string
+  isReversed?: boolean
+  reversedAt?: string
+  reversedByAdminId?: string
+  reversalReason?: string
 }

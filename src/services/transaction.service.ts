@@ -27,7 +27,7 @@ const COLLECTION_NAME = 'transactions'
 export const transactionService = {
   /**
    * Create immutable transaction sales record with complete snapshots.
-   * Status initialized to 'OPEN'.
+   * Status initialized to 'OPEN' and paymentStatus to 'UNPAID'.
    */
   async createTransaction(data: {
     vehicleSnapshot: VehicleSnapshot
@@ -46,6 +46,8 @@ export const transactionService = {
         id: docRef.id,
         transactionNumber,
         status: 'OPEN',
+        paymentStatus: 'UNPAID',
+        paidAmount: 0,
         vehicleSnapshot: data.vehicleSnapshot,
         customerSnapshot: data.customerSnapshot,
         servicePackageSnapshot: data.servicePackageSnapshot,

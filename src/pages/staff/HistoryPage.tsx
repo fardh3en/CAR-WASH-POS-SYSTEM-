@@ -1,17 +1,24 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '@/hooks/useAuth'
 import type { Transaction } from '@/types/transaction.types'
 import { transactionService } from '@/services/transaction.service'
 import { VehicleSearch } from '@/components/vehicle/VehicleSearch'
+import { PaymentModal } from '@/components/payment/PaymentModal'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { History, RefreshCw, AlertCircle, Ban } from 'lucide-react'
+import { History, RefreshCw, AlertCircle, Ban, CreditCard } from 'lucide-react'
 
 export function StaffHistoryPage() {
+  const { user, userProfile } = useAuth()
+
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([])
   const [searchResults, setSearchResults] = useState<Transaction[] | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [searching, setSearching] = useState<boolean>(false)
+
+  // Payment Modal state
+  const [payingTx, setPayingTx] = useState<Transaction | null>(null)
 
   // Cancel order modal state
   const [cancellingTx, setCancellingTx] = useState<Transaction | null>(null)
@@ -89,7 +96,7 @@ export function StaffHistoryPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Staff Service History & Vehicle Lookup</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          Lookup past transactions by vehicle registration number or view shift activity
+          Lookup past transactions by vehicle registration number, collect pending payments, or view shift activity
         </p>
       </div>
 
@@ -155,13 +162,36 @@ export function StaffHistoryPage() {
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                          tx.status === 'OPEN'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-red-100 text-red-800'
+                          tx.status === 'COMPLETED'
+                            ? 'bg-green-100 text-green-800'
+                            : tx.status === 'CANCELLED'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-blue-100 text-blue-800'
                         }`}
                       >
                         {tx.status}
                       </span>
+                      <span
+                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                          tx.paymentStatus === 'PAID' ? 'bg-green-600 text-white' : 'bg-amber-500 text-white'
+                        }`}
+                      >
+                        {tx.paymentStatus || 'UNPAID'}
+                      </span>
+
+                      {/* Payment Collection Action for OPEN orders */}
+                      {tx.status === 'OPEN' && tx.paymentStatus !== 'PAID' && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => setPayingTx(tx)}
+                          className="h-7 text-xs bg-green-600 hover:bg-green-700 font-bold"
+                        >
+                          <CreditCard className="h-3 w-3 mr-1" /> Pay ₹{tx.pricingSnapshot.actualPrice}
+                        </Button>
+                      )}
+
+                      {/* Cancel Order Action */}
                       {tx.status === 'OPEN' && (
                         <Button
                           variant="outline"
@@ -172,7 +202,7 @@ export function StaffHistoryPage() {
                           }}
                           className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
                         >
-                          <Ban className="h-3 w-3 mr-1" /> Cancel Order
+                          <Ban className="h-3 w-3 mr-1" /> Cancel
                         </Button>
                       )}
                     </div>
@@ -199,9 +229,9 @@ export function StaffHistoryPage() {
                       <span className="font-extrabold text-sm text-[hsl(var(--primary))]">
                         ₹{tx.pricingSnapshot.actualPrice}
                       </span>
-                      {tx.pricingSnapshot.adjustmentReason && (
-                        <span className="text-[10px] text-[hsl(var(--muted-foreground))] block">
-                          Reason: {tx.pricingSnapshot.adjustmentReason}
+                      {tx.paymentMethod && (
+                        <span className="text-[11px] font-semibold text-green-700 block">
+                          Paid via {tx.paymentMethod}
                         </span>
                       )}
                     </div>
@@ -218,6 +248,23 @@ export function StaffHistoryPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Payment Modal */}
+      {payingTx && user && userProfile && (
+        <PaymentModal
+          transaction={payingTx}
+          staffId={user.uid}
+          staffName={userProfile.displayName || user.email || 'Staff Member'}
+          onPaymentSuccess={async () => {
+            setPayingTx(null)
+            await loadRecent()
+            if (searchResults !== null && payingTx.vehicleSnapshot.registrationNumber) {
+              await handleVehicleSearch(payingTx.vehicleSnapshot.registrationNumber)
+            }
+          }}
+          onClose={() => setPayingTx(null)}
+        />
+      )}
 
       {/* Controlled Cancellation Modal */}
       {cancellingTx && (
