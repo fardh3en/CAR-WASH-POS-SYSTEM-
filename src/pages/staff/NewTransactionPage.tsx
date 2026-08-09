@@ -1,19 +1,25 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '@/hooks/useAuth'
 import type { Vehicle, VehicleCategory } from '@/types/vehicle.types'
 import type { Customer } from '@/types/customer.types'
-import type { ServiceSelectionState } from '@/types/service.types'
+import type { ServiceSelectionState, ServicePackage } from '@/types/service.types'
+import type { Transaction } from '@/types/transaction.types'
 import { vehicleService } from '@/services/vehicle.service'
 import { vehicleCategoryService } from '@/services/vehicleCategory.service'
 import { customerService } from '@/services/customer.service'
+import { servicePackageService } from '@/services/servicePackage.service'
+import { transactionService } from '@/services/transaction.service'
 import { VehicleSearch } from '@/components/vehicle/VehicleSearch'
 import { VehicleForm } from '@/components/vehicle/VehicleForm'
 import { ServiceSelector } from '@/components/service/ServiceSelector'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Sparkles } from 'lucide-react'
+import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Clock, FileCheck } from 'lucide-react'
 
 export function StaffNewTransactionPage() {
+  const { user, userProfile } = useAuth()
+
   const [searchedRegNumber, setSearchedRegNumber] = useState<string>('')
   const [searching, setSearching] = useState<boolean>(false)
   const [searchExecuted, setSearchExecuted] = useState<boolean>(false)
@@ -21,6 +27,7 @@ export function StaffNewTransactionPage() {
   const [foundVehicle, setFoundVehicle] = useState<Vehicle | null>(null)
   const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null)
   const [categories, setCategories] = useState<VehicleCategory[]>([])
+  const [servicePackages, setServicePackages] = useState<ServicePackage[]>([])
 
   // Optional customer update state
   const [showCustomerUpdate, setShowCustomerUpdate] = useState<boolean>(false)
@@ -31,18 +38,27 @@ export function StaffNewTransactionPage() {
   // Phase 4: Service Selection State
   const [selectedService, setSelectedService] = useState<ServiceSelectionState | null>(null)
 
+  // Phase 5: Time & Creation State
+  const [expectedPickup, setExpectedPickup] = useState<string>('')
+  const [creatingOrder, setCreatingOrder] = useState<boolean>(false)
+  const [createdTransaction, setCreatedTransaction] = useState<Transaction | null>(null)
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    async function loadCategories() {
+    async function loadData() {
       try {
-        const list = await vehicleCategoryService.getVehicleCategories()
-        setCategories(list)
+        const [catList, pkgList] = await Promise.all([
+          vehicleCategoryService.getVehicleCategories(),
+          servicePackageService.getServicePackages(),
+        ])
+        setCategories(catList)
+        setServicePackages(pkgList)
       } catch (err) {
-        console.error('Failed to load vehicle categories:', err)
+        console.error('Failed to load initial data:', err)
       }
     }
-    void loadCategories()
+    void loadData()
   }, [])
 
   const handleSearch = async (normalizedReg: string) => {
@@ -53,6 +69,7 @@ export function StaffNewTransactionPage() {
     setFoundVehicle(null)
     setFoundCustomer(null)
     setSelectedService(null)
+    setCreatedTransaction(null)
     setShowCustomerUpdate(false)
 
     try {
@@ -83,7 +100,9 @@ export function StaffNewTransactionPage() {
     setFoundVehicle(null)
     setFoundCustomer(null)
     setSelectedService(null)
+    setCreatedTransaction(null)
     setShowCustomerUpdate(false)
+    setExpectedPickup('')
     setErrorMessage(null)
   }
 
@@ -123,6 +142,85 @@ export function StaffNewTransactionPage() {
     }
   }
 
+  /**
+   * Phase 5 Order Creation: Constructs immutable snapshots and writes to Firestore
+   */
+  const handleCreateOrder = async () => {
+    if (!foundVehicle || !selectedService || !user || !userProfile) {
+      setErrorMessage('Cannot create order: missing vehicle, service selection, or staff session.')
+      return
+    }
+
+    if (selectedService.standardPrice === null || selectedService.actualPrice === null) {
+      setErrorMessage('Cannot create order with an unconfigured price.')
+      return
+    }
+
+    setCreatingOrder(true)
+    setErrorMessage(null)
+
+    try {
+      const category = categories.find((c) => c.id === foundVehicle.categoryId)
+      const pkgObj = servicePackages.find((p) => p.id === selectedService.servicePackageId)
+
+      // Construct immutable snapshots
+      const vehicleSnap = {
+        vehicleId: foundVehicle.id,
+        registrationNumber: foundVehicle.registrationNumber,
+        displayRegistrationNumber: foundVehicle.displayRegistrationNumber,
+        categoryId: foundVehicle.categoryId,
+        categoryName: category?.name || 'Vehicle Category',
+        variant: foundVehicle.variant,
+        model: foundVehicle.model,
+      }
+
+      const customerSnap = {
+        customerId: foundVehicle.customerId,
+        name: foundCustomer?.name,
+        phoneNumber: foundCustomer?.phoneNumber,
+      }
+
+      const pkgSnap = {
+        servicePackageId: selectedService.servicePackageId,
+        name: selectedService.servicePackageName,
+        description: pkgObj?.description,
+        activities: pkgObj?.activities || [],
+      }
+
+      const standardP = selectedService.standardPrice
+      const actualP = selectedService.actualPrice
+      const pricingSnap = {
+        standardPrice: standardP,
+        actualPrice: actualP,
+        priceAdjustment: actualP - standardP,
+        adjustmentReason: selectedService.adjustmentReason,
+      }
+
+      // Staff Snapshot from Auth Session (Never form input!)
+      const staffSnap = {
+        staffId: user.uid,
+        staffName: userProfile.displayName || user.email || 'Staff Member',
+        staffEmail: user.email || userProfile.email || 'staff@mrwash.com',
+      }
+
+      const created = await transactionService.createTransaction({
+        vehicleSnapshot: vehicleSnap,
+        customerSnapshot: customerSnap,
+        servicePackageSnapshot: pkgSnap,
+        pricingSnapshot: pricingSnap,
+        staffSnapshot: staffSnap,
+        expectedPickupAt: expectedPickup ? new Date(expectedPickup).toISOString() : undefined,
+      })
+
+      setCreatedTransaction(created)
+    } catch (err) {
+      console.error('Failed to create sales transaction:', err)
+      setErrorMessage('Failed to create transaction order. Please try again.')
+    } finally {
+      setCreatingOrder(false)
+    }
+  }
+
   const categoryName =
     categories.find((c) => c.id === foundVehicle?.categoryId)?.name || 'Vehicle Category'
 
@@ -131,26 +229,28 @@ export function StaffNewTransactionPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Front-Desk Service Order</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          Phase 4 &mdash; Vehicle Identification, Customer Lookup & Service/Price Selection
+          Create operational sales record with immutable snapshots
         </p>
       </div>
 
       {/* Step 1: Vehicle Search Form */}
-      <Card className="border-[hsl(var(--border))]">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base flex items-center justify-between">
-            <span>Step 1: Vehicle Search</span>
-            {searchExecuted && (
-              <Button variant="ghost" size="sm" onClick={handleResetAll} className="h-8 text-xs">
-                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reset
-              </Button>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VehicleSearch onSearchSubmit={handleSearch} loading={searching} />
-        </CardContent>
-      </Card>
+      {!createdTransaction && (
+        <Card className="border-[hsl(var(--border))]">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>Step 1: Vehicle Search</span>
+              {searchExecuted && (
+                <Button variant="ghost" size="sm" onClick={handleResetAll} className="h-8 text-xs">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reset
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <VehicleSearch onSearchSubmit={handleSearch} loading={searching} />
+          </CardContent>
+        </Card>
+      )}
 
       {errorMessage && (
         <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
@@ -160,7 +260,7 @@ export function StaffNewTransactionPage() {
       )}
 
       {/* Step 2: Search Result handling */}
-      {searchExecuted && (
+      {searchExecuted && !createdTransaction && (
         <>
           {foundVehicle ? (
             /* Vehicle Identified */
@@ -246,7 +346,7 @@ export function StaffNewTransactionPage() {
                 </CardContent>
               </Card>
 
-              {/* Step 3: Phase 4 Service Package & Pricing Selection */}
+              {/* Step 3: Service Package & Pricing Selection */}
               {!selectedService ? (
                 <ServiceSelector
                   vehicle={foundVehicle}
@@ -254,20 +354,20 @@ export function StaffNewTransactionPage() {
                   onSelectionComplete={(selection) => setSelectedService(selection)}
                 />
               ) : (
-                /* Service Selection Confirmed */
-                <Card className="border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5 shadow-sm">
+                /* Order Review & Creation Card */
+                <Card className="border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5 shadow-md">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-[hsl(var(--primary))]" />
-                        <CardTitle className="text-lg">Service & Price Selected</CardTitle>
-                      </div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <FileCheck className="h-5 w-5 text-[hsl(var(--primary))]" />
+                        Review & Create Sales Order
+                      </CardTitle>
                       <Button variant="outline" size="sm" onClick={() => setSelectedService(null)} className="h-8 text-xs">
                         Change Service
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
                       <div>
                         <span className="text-xs text-[hsl(var(--muted-foreground))] block">Selected Package</span>
@@ -288,9 +388,35 @@ export function StaffNewTransactionPage() {
                       </div>
                     </div>
 
-                    <div className="p-3 rounded-md bg-[hsl(var(--secondary))] text-xs text-[hsl(var(--muted-foreground))] flex items-center justify-between">
-                      <span>Phase 4 Service & Price Selection Complete.</span>
-                      <span className="font-semibold">Ready for Phase 5 Transaction Creation</span>
+                    {/* Optional Expected Pickup Time Input */}
+                    <div className="space-y-1.5 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
+                      <label htmlFor="pickupTime" className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--foreground))] flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                        Customer Expected Return / Pickup Time <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">(Optional)</span>
+                      </label>
+                      <Input
+                        id="pickupTime"
+                        type="datetime-local"
+                        className="max-w-xs"
+                        value={expectedPickup}
+                        onChange={(e) => setExpectedPickup(e.target.value)}
+                      />
+                      <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                        For vehicles staying hours or days. Represents customer's expected return time.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-end pt-2">
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="lg"
+                        onClick={handleCreateOrder}
+                        disabled={creatingOrder}
+                        className="min-w-[180px] font-bold"
+                      >
+                        {creatingOrder ? 'Creating Order...' : 'Create Order'}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -305,6 +431,82 @@ export function StaffNewTransactionPage() {
             />
           )}
         </>
+      )}
+
+      {/* Step 4: Created Order Confirmation */}
+      {createdTransaction && (
+        <Card className="border-green-300 bg-green-50 shadow-lg">
+          <CardHeader className="pb-3 text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-green-800">
+                <CheckCircle2 className="h-6 w-6" />
+                <CardTitle className="text-xl font-bold">Order Created Successfully</CardTitle>
+              </div>
+              <span className="text-xs font-mono font-bold bg-green-200 text-green-900 px-3 py-1 rounded-full uppercase tracking-wider">
+                Status: {createdTransaction.status}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-[hsl(var(--card))] p-5 rounded-lg border border-green-200 space-y-4">
+              <div className="flex items-baseline justify-between border-b border-[hsl(var(--border))] pb-3">
+                <div>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))] uppercase font-semibold block">
+                    Transaction Number
+                  </span>
+                  <span className="text-xl font-mono font-extrabold text-[hsl(var(--primary))]">
+                    {createdTransaction.transactionNumber}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-[hsl(var(--muted-foreground))] uppercase font-semibold block">
+                    Vehicle Number
+                  </span>
+                  <span className="text-base font-bold font-mono">
+                    {createdTransaction.vehicleSnapshot.displayRegistrationNumber}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <span className="text-[hsl(var(--muted-foreground))] block">Vehicle Category</span>
+                  <span className="font-semibold text-sm">
+                    {createdTransaction.vehicleSnapshot.categoryName} {createdTransaction.vehicleSnapshot.variant ? `(${createdTransaction.vehicleSnapshot.variant})` : ''}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[hsl(var(--muted-foreground))] block">Service Package</span>
+                  <span className="font-semibold text-sm">
+                    {createdTransaction.servicePackageSnapshot.name}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[hsl(var(--muted-foreground))] block">Charged Amount</span>
+                  <span className="font-extrabold text-sm text-[hsl(var(--primary))]">
+                    ₹{createdTransaction.pricingSnapshot.actualPrice}
+                  </span>
+                  {createdTransaction.pricingSnapshot.adjustmentReason && (
+                    <span className="text-[10px] text-[hsl(var(--muted-foreground))] block">
+                      ({createdTransaction.pricingSnapshot.adjustmentReason})
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                <span>Created by: {createdTransaction.staffSnapshot.staffName}</span>
+                <span>Arrived: {new Date(createdTransaction.vehicleArrivedAt).toLocaleTimeString()}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="default" onClick={handleResetAll}>
+                Start New Transaction
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

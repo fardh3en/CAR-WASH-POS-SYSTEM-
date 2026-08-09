@@ -70,6 +70,26 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow delete: if false;
     }
+
+    // Transaction Counters Security Rules (Atomic Increment Only)
+    match /transactionCounters/{dateStr} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser() && request.resource.data.count == 1;
+      allow update: if isActiveUser() && request.resource.data.count == resource.data.count + 1;
+      allow delete: if false;
+    }
+
+    // Transactions Security Rules (Strict Field-Diff Cancellation Protection)
+    match /transactions/{transactionId} {
+      allow read, create: if isActiveUser();
+      allow update: if isActiveUser()
+        && resource.data.status == 'OPEN'
+        && request.resource.data.status == 'CANCELLED'
+        && request.resource.data.cancellationReason is string
+        && request.resource.data.cancellationReason.size() > 0
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancellationReason', 'updatedAt']);
+      allow delete: if false;
+    }
     
     // Default deny for all other non-user collections
     match /{document=**} {
