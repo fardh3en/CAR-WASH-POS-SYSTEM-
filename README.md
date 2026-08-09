@@ -65,7 +65,32 @@ cp .env.example .env.local
 
 ---
 
+## First-Admin Bootstrap Process
+
+1. **Firebase Authentication Setup**:
+   Create the primary Administrator identity directly within the Firebase Console (Authentication section) or via Firebase CLI / Admin SDK. No public registration route exists.
+
+2. **Firestore Profile Document Creation**:
+   Create the matching document in Cloud Firestore at `users/{FIREBASE_AUTH_UID}`:
+   ```json
+   {
+     "uid": "FIREBASE_AUTH_UID",
+     "email": "admin@mrwash.com",
+     "displayName": "System Administrator",
+     "role": "ADMIN",
+     "isActive": true,
+     "createdAt": "2026-08-09T16:30:00Z",
+     "updatedAt": "2026-08-09T16:30:00Z"
+   }
+   ```
+
+3. **User Management**:
+   Thereafter, the active Administrator logs in via `/login` and manages Staff accounts through administrative controls.
+
+---
+
 ## Project Status
 
 - **Phase 1 (Project Foundation)**: Completed
-- **Phase 2 (Authentication & Roles)**: Pending
+- **Phase 2 (Authentication & Roles)**: Completed & Audited
+- **Phase 3 (Vehicle & Customer Foundation)**: Next Phase
