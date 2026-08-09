@@ -28,6 +28,16 @@ service cloud.firestore {
       return isAuthenticated() && getUserData().isActive == true;
     }
 
+    // Helper function: Check if transaction document exists
+    function transactionExists(txId) {
+      return exists(/databases/$(database)/documents/transactions/$(txId));
+    }
+
+    // Helper function: Get transaction document data
+    function getTransactionData(txId) {
+      return get(/databases/$(database)/documents/transactions/$(txId)).data;
+    }
+
     // Users Collection Security Rules
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
@@ -111,10 +121,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Payments Collection Security Rules (Phase 6 Audit Log)
+    // Payments Collection Security Rules (Phase 6 Independent Validation)
     match /payments/{paymentId} {
       allow read: if isActiveUser();
-      allow create: if isActiveUser() && request.resource.data.amount > 0 && request.resource.data.paymentMethod in ['CASH', 'UPI'];
+      allow create: if isActiveUser()
+        && request.resource.data.paymentMethod in ['CASH', 'UPI']
+        && request.resource.data.transactionId is string
+        && transactionExists(request.resource.data.transactionId)
+        && getTransactionData(request.resource.data.transactionId).status == 'OPEN'
+        && getTransactionData(request.resource.data.transactionId).paymentStatus == 'UNPAID'
+        && request.resource.data.amount == getTransactionData(request.resource.data.transactionId).pricingSnapshot.actualPrice;
       allow update: if isAdmin()
         && resource.data.isReversed != true
         && request.resource.data.isReversed == true
