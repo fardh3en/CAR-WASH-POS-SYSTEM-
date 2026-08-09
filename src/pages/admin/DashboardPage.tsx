@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { analyticsService } from '@/services/analytics.service'
+import { excelService } from '@/services/excel.service'
 import {
   getPeriodBoundariesIST,
   type ReportingPeriod,
@@ -28,6 +29,7 @@ import {
   AlertCircle,
   RefreshCw,
   Loader2,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -95,6 +97,30 @@ export function AdminDashboardPage() {
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [exporting, setExporting] = useState<boolean>(false)
+
+  const handleExportExcel = async () => {
+    if (selectedPeriod === 'CUSTOM' && (!customFrom || !customTo)) return
+    setExporting(true)
+    setError(null)
+    try {
+      const res = await excelService.exportSalesReport({
+        period: selectedPeriod,
+        customFrom: customFrom || undefined,
+        customTo: customTo || undefined,
+        exportScope: 'SALES_ONLY',
+      })
+      if (!res.success) {
+        setError(res.message || 'Export failed.')
+      }
+    } catch (err) {
+      console.error('Excel Export Error from Dashboard:', err)
+      setError('Failed to generate Excel export.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const loadAnalytics = useCallback(async () => {
     if (selectedPeriod === 'CUSTOM' && (!customFrom || !customTo)) return
 
@@ -140,20 +166,36 @@ export function AdminDashboardPage() {
             Business analytics computed from completed transactions
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void loadAnalytics()}
-          disabled={loading}
-          className="gap-1.5 self-start sm:self-auto"
-        >
-          {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => void handleExportExcel()}
+            disabled={exporting || loading}
+            className="gap-1.5 font-semibold bg-green-600 hover:bg-green-700"
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+            )}
+            Export to Excel
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadAnalytics()}
+            disabled={loading}
+            className="gap-1.5"
+          >
+            {loading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Period Selector */}
