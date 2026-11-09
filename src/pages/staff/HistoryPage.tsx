@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { History, RefreshCw, AlertCircle, Ban, CreditCard, Receipt, MessageCircle } from 'lucide-react'
 import { formatPhoneForWhatsApp, buildWhatsAppMessage, generateWhatsAppUrl } from '@/utils/receipt.utils'
+import { formatDateTimeIST } from '@/utils/date.utils'
 
 export function StaffHistoryPage() {
   const { user, userProfile } = useAuth()
@@ -79,7 +80,17 @@ export function StaffHistoryPage() {
     setErrorMessage(null)
 
     try {
-      await transactionService.cancelTransaction(cancellingTx.id, reason)
+      await transactionService.cancelTransaction(
+        cancellingTx.id,
+        reason,
+        user
+          ? {
+              userId: user.uid,
+              userName: userProfile?.displayName || user.email || 'Staff',
+              userRole: userProfile?.role || 'STAFF',
+            }
+          : undefined
+      )
       setCancellingTx(null)
       setCancellationReason('')
       await loadRecent()
@@ -177,7 +188,7 @@ export function StaffHistoryPage() {
                           {tx.transactionNumber}
                         </span>
                         <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                          Arrived: {new Date(tx.vehicleArrivedAt).toLocaleString()}
+                          Arrived: {formatDateTimeIST(tx.vehicleArrivedAt)}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">

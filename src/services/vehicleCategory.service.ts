@@ -1,6 +1,8 @@
 import { collection, getDocs, doc, setDoc, query, where, orderBy } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { VehicleCategory } from '@/types/vehicle.types'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const COLLECTION_NAME = 'vehicleCategories'
 
@@ -27,6 +29,23 @@ export const vehicleCategoryService = {
    * Fetch active vehicle categories sorted by displayOrder
    */
   async getVehicleCategories(): Promise<VehicleCategory[]> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient()
+        .from('vehicle_categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true })
+      if (error) throw error
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        displayOrder: row.display_order,
+        isActive: row.is_active,
+        variants: row.variants ?? [],
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }))
+    }
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
@@ -59,6 +78,7 @@ export const vehicleCategoryService = {
    * Seed default practical business categories if collection is empty
    */
   async seedDefaultCategories(): Promise<void> {
+    if (BACKEND_PROVIDER === 'supabase') return
     try {
       const snapshot = await getDocs(collection(db, COLLECTION_NAME))
       if (!snapshot.empty) return

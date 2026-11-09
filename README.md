@@ -29,7 +29,7 @@ The four authoritative project documents located in the repository root govern a
 - **Routing**: React Router v7
 - **Analytics & Visualizations**: Recharts v3
 - **Spreadsheet Engine**: SheetJS (`xlsx` v0.18)
-- **Backend & Database**: Firebase Authentication, Cloud Firestore (with composite indexing & hardened security rules)
+- **Backend & Database**: Firebase Authentication + Cloud Firestore or Supabase Auth + PostgreSQL; select one provider per build
 - **Icons**: Lucide React
 - **Locale & Timezone**: Asia/Kolkata (`INR ₹`, IST UTC+5:30)
 
@@ -47,6 +47,7 @@ The four authoritative project documents located in the repository root govern a
 - [x] **Phase 8 — Admin Dashboard & Analytics**: Client-side metric engine, IST calendar period boundaries (Today/Week/Month/Year/Custom), Recharts daily sales trend, payment split, deduplicated vehicle return lookups.
 - [x] **Phase 9 — Excel Reporting**: Client-side native binary `.xlsx` export engine, `Executive Summary` & `Transaction Details` worksheets, combined multi-filters, sales-only vs operational audit exports.
 - [x] **Phase 10 — Exceptions, Corrections & Audit**: Append-only `auditLogs` collection, identity-verified security rules, 100% atomic audit logging for all 4 mutation paths (`TRANSACTION_CANCELLED`, `PAYMENT_REVERSED`, `PRICE_CHANGED`, `SERVICE_CONFIGURATION_CHANGED`), Admin Audit Viewer (`/admin/audit`).
+- [x] **Supabase application adapter**: Optional Supabase Auth/PostgreSQL provider, SQL migrations, guarded atomic RPCs, and Firebase retained as the default fallback. No hosted project has been provisioned and no Firestore data has been imported.
 - [ ] **Phase 11 — Responsive UI Refinement**: *Next Phase*
 - [ ] **Phase 12 — Testing, Security & Production Readiness**: *Future Phase*
 
@@ -91,13 +92,15 @@ npm run lint
 
 ### Environment Configuration
 
-Copy `.env.example` to `.env.local` and add your Firebase credentials:
+Copy `.env.example` to `.env.local`, then configure the backend you want to run. Firebase remains the default. To select Supabase, set `VITE_BACKEND_PROVIDER=supabase` and add the project URL and anon key:
 
 ```bash
 cp .env.example .env.local
 ```
 
 `.env.local` is ignored by Git and will not be committed.
+
+See [SUPABASE_MIGRATION.md](./SUPABASE_MIGRATION.md) for database setup, first-admin bootstrap, and the remaining data migration and cutover steps.
 
 ---
 

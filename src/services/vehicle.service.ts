@@ -2,6 +2,8 @@ import { collection, doc, setDoc, getDocs, query, where, updateDoc } from 'fireb
 import { db } from '@/config/firebase'
 import type { Vehicle } from '@/types/vehicle.types'
 import { normalizeRegistrationNumber, formatRegistrationNumber } from '@/utils/vehicle.utils'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const COLLECTION_NAME = 'vehicles'
 
@@ -13,6 +15,16 @@ export const vehicleService = {
   async getVehicleByRegistration(rawRegNumber: string): Promise<Vehicle | null> {
     const normalized = normalizeRegistrationNumber(rawRegNumber)
     if (!normalized) return null
+
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient()
+        .from('vehicles')
+        .select('*')
+        .eq('registration_number', normalized)
+        .maybeSingle()
+      if (error) throw error
+      return data ? mapSupabaseVehicle(data) : null
+    }
 
     try {
       const q = query(
@@ -53,6 +65,26 @@ export const vehicleService = {
       throw new Error('Registration number is mandatory')
     }
 
+    if (BACKEND_PROVIDER === 'supabase') {
+      const now = new Date().toISOString()
+      const { data: row, error } = await getSupabaseClient()
+        .from('vehicles')
+        .insert({
+          registration_number: normalized,
+          display_registration_number: formatRegistrationNumber(normalized),
+          category_id: data.categoryId,
+          variant: data.variant?.trim() || null,
+          model: data.model?.trim() || null,
+          customer_id: data.customerId || null,
+          created_at: now,
+          updated_at: now,
+        })
+        .select('*')
+        .single()
+      if (error) throw error
+      return mapSupabaseVehicle(row)
+    }
+
     try {
       const docRef = doc(collection(db, COLLECTION_NAME))
       const now = new Date().toISOString()
@@ -80,6 +112,21 @@ export const vehicleService = {
    * Update an existing vehicle record (e.g. assign customer ID, update category/model)
    */
   async updateVehicle(id: string, updates: Partial<Vehicle>): Promise<void> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (updates.registrationNumber !== undefined) {
+        const normalized = normalizeRegistrationNumber(updates.registrationNumber)
+        payload.registration_number = normalized
+        payload.display_registration_number = formatRegistrationNumber(normalized)
+      }
+      if (updates.categoryId !== undefined) payload.category_id = updates.categoryId
+      if (updates.variant !== undefined) payload.variant = updates.variant?.trim() || null
+      if (updates.model !== undefined) payload.model = updates.model?.trim() || null
+      if (updates.customerId !== undefined) payload.customer_id = updates.customerId
+      const { error } = await getSupabaseClient().from('vehicles').update(payload).eq('id', id)
+      if (error) throw error
+      return
+    }
     try {
       const docRef = doc(db, COLLECTION_NAME, id)
       await updateDoc(docRef, {
@@ -91,4 +138,28 @@ export const vehicleService = {
       throw error
     }
   },
+}
+
+function mapSupabaseVehicle(row: {
+  id: string
+  registration_number: string
+  display_registration_number: string
+  category_id: string
+  variant: string | null
+  model: string | null
+  customer_id: string | null
+  created_at: string
+  updated_at: string
+}): Vehicle {
+  return {
+    id: row.id,
+    registrationNumber: row.registration_number,
+    displayRegistrationNumber: row.display_registration_number,
+    categoryId: row.category_id,
+    variant: row.variant ?? undefined,
+    model: row.model ?? undefined,
+    customerId: row.customer_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }

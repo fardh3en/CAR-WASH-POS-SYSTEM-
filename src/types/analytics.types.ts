@@ -79,4 +79,13 @@ export interface AnalyticsResult {
   // --- Trend Data ---
   /** Grouped sales trend for charting (daily/weekly/monthly granularity) */
   dailyTrend: DailyTrendPoint[]
+
+  // --- Day-over-Day Comparison (Computed for Daily Views) ---
+  yesterdayComparison?: {
+    yesterdaySales: number
+    yesterdayVehicles: number
+    differenceSales: number
+    differenceVehicles: number
+    percentGrowth: number
+  }
 }

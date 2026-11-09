@@ -10,6 +10,8 @@ import {
 import { db } from '@/config/firebase'
 import type { PaymentRecord, PaymentMethod } from '@/types/transaction.types'
 import { auditService } from './audit.service'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const PAYMENTS_COLLECTION = 'payments'
 const TRANSACTIONS_COLLECTION = 'transactions'
@@ -35,6 +37,20 @@ export const paymentService = {
     }
     if (paymentMethod !== 'CASH' && paymentMethod !== 'UPI') {
       throw new Error('Invalid payment method. Only CASH and UPI are supported.')
+    }
+
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient().rpc('rpc_complete_payment', {
+        p_transaction_id: transactionId,
+        p_payment_method: paymentMethod,
+        p_amount: amount,
+        p_upi_reference: upiReferenceNumber?.trim() || null,
+        p_notes: notes?.trim() || null,
+        p_staff_id: staffId,
+        p_staff_name: staffName,
+      })
+      if (error) throw error
+      return mapSupabasePayment(data as Record<string, unknown>)
     }
 
     const txDocRef = doc(db, TRANSACTIONS_COLLECTION, transactionId)
@@ -116,6 +132,17 @@ export const paymentService = {
       throw new Error('A mandatory reversal reason must be provided.')
     }
 
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { error } = await getSupabaseClient().rpc('rpc_reverse_payment', {
+        p_payment_id: paymentId,
+        p_reversal_reason: reason,
+        p_admin_id: adminId,
+        p_admin_name: adminName || 'Administrator',
+      })
+      if (error) throw error
+      return
+    }
+
     const paymentDocRef = doc(db, PAYMENTS_COLLECTION, paymentId)
     const now = new Date().toISOString()
 
@@ -188,6 +215,17 @@ export const paymentService = {
    * Fetch payment records for a transaction (excluding reversed unless specified)
    */
   async getPaymentForTransaction(transactionId: string): Promise<PaymentRecord | null> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient()
+        .from('payments')
+        .select('*')
+        .eq('transaction_id', transactionId)
+        .order('recorded_at', { ascending: false })
+      if (error) throw error
+      if (!data || data.length === 0) return null
+      const activePayment = data.find((payment) => !payment.is_reversed)
+      return mapSupabasePayment((activePayment ?? data[0]) as Record<string, unknown>)
+    }
     try {
       const q = query(
         collection(db, PAYMENTS_COLLECTION),
@@ -205,4 +243,23 @@ export const paymentService = {
       throw error
     }
   },
+}
+
+function mapSupabasePayment(row: Record<string, unknown>): PaymentRecord {
+  return {
+    id: row.id as string,
+    transactionId: row.transaction_id as string,
+    transactionNumber: row.transaction_number as string,
+    amount: row.amount as number,
+    paymentMethod: row.payment_method as PaymentRecord['paymentMethod'],
+    upiReferenceNumber: (row.upi_reference_number as string | null) ?? undefined,
+    notes: (row.notes as string | null) ?? undefined,
+    recordedByStaffId: row.recorded_by_staff_id as string,
+    recordedByStaffName: row.recorded_by_staff_name as string,
+    recordedAt: row.recorded_at as string,
+    isReversed: row.is_reversed as boolean,
+    reversedAt: (row.reversed_at as string | null) ?? undefined,
+    reversedByAdminId: (row.reversed_by_admin_id as string | null) ?? undefined,
+    reversalReason: (row.reversal_reason as string | null) ?? undefined,
+  }
 }

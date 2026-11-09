@@ -10,6 +10,43 @@
  */
 
 const IST_OFFSET_MINUTES = 330 // UTC+5:30
+const IST_TIME_ZONE = 'Asia/Kolkata'
+
+/** Format an ISO timestamp in the business timezone, regardless of device locale. */
+export function formatDateTimeIST(value: string | Date): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: IST_TIME_ZONE,
+  }).format(value instanceof Date ? value : new Date(value))
+}
+
+/** Format an ISO date or timestamp in the business timezone. */
+export function formatDateIST(value: string | Date): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'short',
+    timeZone: IST_TIME_ZONE,
+  }).format(value instanceof Date ? value : new Date(value))
+}
+
+/** Convert a `datetime-local` value, which represents IST wall time, to UTC ISO. */
+export function parseDateTimeLocalIST(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+    throw new Error('Expected pickup must be a valid date and time.')
+  }
+  const [date, time] = value.split('T')
+  const [year, month, day] = date.split('-').map(Number)
+  const [hour, minute] = time.split(':').map(Number)
+  const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  if (month < 1 || month > 12 || day < 1 || day > lastDayOfMonth || hour > 23 || minute > 59) {
+    throw new Error('Expected pickup must be a valid date and time.')
+  }
+  const parsed = new Date(`${value}:00+05:30`)
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error('Expected pickup must be a valid date and time.')
+  }
+  return parsed.toISOString()
+}
 
 /**
  * Returns a Date representing the start of the given UTC date-like value in IST.
@@ -70,7 +107,7 @@ export function getPeriodBoundariesIST(
     case 'TODAY': {
       const start = istMidnight(year, month, day)
       const end = istMidnight(year, month, day + 1)
-      return { start, end, label: `Today (${new Date().toLocaleDateString('en-IN')})` }
+      return { start, end, label: `Today (${formatDateIST(new Date())})` }
     }
 
     case 'THIS_WEEK': {
@@ -84,7 +121,10 @@ export function getPeriodBoundariesIST(
     case 'THIS_MONTH': {
       const start = istMidnight(year, month, 1)
       const end = istMidnight(year, month + 1, 1)  // JS Date handles month overflow
-      const monthName = new Date(year, month, 1).toLocaleString('en-IN', { month: 'long' })
+      const monthName = new Intl.DateTimeFormat('en-IN', {
+        month: 'long',
+        timeZone: IST_TIME_ZONE,
+      }).format(new Date(Date.UTC(year, month, 1, 12)))
       return { start, end, label: `${monthName} ${year}` }
     }
 

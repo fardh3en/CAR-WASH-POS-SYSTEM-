@@ -35,6 +35,8 @@ import type {
   CategoryDistributionItem,
   DailyTrendPoint,
 } from '@/types/analytics.types'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const TRANSACTIONS_COLLECTION = 'transactions'
 
@@ -187,6 +189,16 @@ export const analyticsService = {
     end: Date,
     periodLabel: string
   ): Promise<AnalyticsResult> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient().rpc('rpc_get_analytics', {
+        p_start_utc: start.toISOString(),
+        p_end_utc: end.toISOString(),
+        p_period_label: periodLabel,
+      })
+      if (error) throw error
+      return data as AnalyticsResult
+    }
+
     const startIso = start.toISOString()
     const endIso = end.toISOString()
 
@@ -306,6 +318,49 @@ export const analyticsService = {
     // -------------------------------------------------------------------------
     const dailyTrend: DailyTrendPoint[] = buildDailyTrend(transactions, start, end)
 
+    // -------------------------------------------------------------------------
+    // 7. Day-over-day comparison for single-day periods (e.g. Today)
+    // -------------------------------------------------------------------------
+    let yesterdayComparison: AnalyticsResult['yesterdayComparison'] = undefined
+    const durationMs = end.getTime() - start.getTime()
+    if (durationMs <= 25 * 60 * 60 * 1000) {
+      try {
+        const yesterdayStart = new Date(start.getTime() - 24 * 60 * 60 * 1000)
+        const yQuery = query(
+          collection(db, TRANSACTIONS_COLLECTION),
+          where('status', '==', 'COMPLETED'),
+          where('createdAt', '>=', yesterdayStart.toISOString()),
+          where('createdAt', '<', start.toISOString())
+        )
+        const ySnap = await getDocs(yQuery)
+        let yesterdaySales = 0
+        let yesterdayVehicles = 0
+        ySnap.forEach((d) => {
+          const t = d.data() as Transaction
+          if (t.status === 'COMPLETED' && t.paymentStatus === 'PAID') {
+            yesterdaySales += t.pricingSnapshot.actualPrice
+            yesterdayVehicles++
+          }
+        })
+        const differenceSales = totalSales - yesterdaySales
+        const differenceVehicles = totalVehicles - yesterdayVehicles
+        const percentGrowth =
+          yesterdaySales > 0
+            ? Math.round(((totalSales - yesterdaySales) / yesterdaySales) * 1000) / 10
+            : 0
+
+        yesterdayComparison = {
+          yesterdaySales,
+          yesterdayVehicles,
+          differenceSales,
+          differenceVehicles,
+          percentGrowth,
+        }
+      } catch (err) {
+        console.warn('Failed to compute day-over-day comparison:', err)
+      }
+    }
+
     return {
       periodLabel,
       totalVehicles,
@@ -322,6 +377,7 @@ export const analyticsService = {
       adjustedTransactionCount,
       totalAdjustmentAmount,
       dailyTrend,
+      yesterdayComparison,
     }
   },
 }

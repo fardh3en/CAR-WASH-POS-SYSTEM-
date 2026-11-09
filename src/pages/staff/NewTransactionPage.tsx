@@ -17,6 +17,7 @@ import { ReceiptModal } from '@/components/receipt/ReceiptModal'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { parseDateTimeLocalIST } from '@/utils/date.utils'
 import { User as UserIcon, CheckCircle2, RefreshCw, AlertCircle, Clock, FileCheck, CreditCard, Receipt } from 'lucide-react'
 
 export function StaffNewTransactionPage() {
@@ -216,7 +217,7 @@ export function StaffNewTransactionPage() {
         servicePackageSnapshot: pkgSnap,
         pricingSnapshot: pricingSnap,
         staffSnapshot: staffSnap,
-        expectedPickupAt: expectedPickup ? new Date(expectedPickup).toISOString() : undefined,
+        expectedPickupAt: expectedPickup ? parseDateTimeLocalIST(expectedPickup) : undefined,
       })
 
       setCreatedTransaction(created)

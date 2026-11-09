@@ -2,6 +2,8 @@ import { collection, getDocs, doc, setDoc, query, where, orderBy, runTransaction
 import { db } from '@/config/firebase'
 import type { ServicePackage } from '@/types/service.types'
 import { auditService } from './audit.service'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const COLLECTION_NAME = 'servicePackages'
 
@@ -49,6 +51,24 @@ export const servicePackageService = {
    * Fetch active service packages ordered by displayOrder
    */
   async getServicePackages(): Promise<ServicePackage[]> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient()
+        .from('service_packages')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true })
+      if (error) throw error
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description ?? undefined,
+        activities: (row.activities ?? []) as string[],
+        displayOrder: row.display_order,
+        isActive: row.is_active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }))
+    }
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
@@ -80,6 +100,7 @@ export const servicePackageService = {
    * Seed exact approved standard service packages if collection is empty
    */
   async seedDefaultServicePackages(): Promise<void> {
+    if (BACKEND_PROVIDER === 'supabase') return
     try {
       const snapshot = await getDocs(collection(db, COLLECTION_NAME))
       if (!snapshot.empty) return
@@ -107,6 +128,20 @@ export const servicePackageService = {
     updates: Partial<ServicePackage>,
     performedBy?: { userId: string; userName: string; userRole: 'ADMIN' | 'STAFF' }
   ): Promise<void> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { error } = await getSupabaseClient().rpc('rpc_update_service_package', {
+        p_package_id: id,
+        p_updates: {
+          ...(updates.name !== undefined ? { name: updates.name } : {}),
+          ...(updates.description !== undefined ? { description: updates.description } : {}),
+          ...(updates.activities !== undefined ? { activities: updates.activities } : {}),
+          ...(updates.displayOrder !== undefined ? { displayOrder: updates.displayOrder } : {}),
+          ...(updates.isActive !== undefined ? { isActive: updates.isActive } : {}),
+        },
+      })
+      if (error) throw error
+      return
+    }
     const docRef = doc(db, COLLECTION_NAME, id)
     const now = new Date().toISOString()
 

@@ -1,57 +1,64 @@
 import React, { useState, useEffect } from 'react'
-import type { User } from 'firebase/auth'
-import type { AuthContextType, LoginCredentials } from '@/types/auth.types'
+import type { AuthContextType, AuthUser, LoginCredentials } from '@/types/auth.types'
 import type { UserProfile, UserRole } from '@/types/user.types'
 import { authService } from '@/services/auth.service'
 import { userService } from '@/services/user.service'
-import { isFirebaseConfigured } from '@/config/firebase'
+import { isBackendConfigured } from '@/config/backend'
 import { AuthContext } from './AuthContextValue'
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!isFirebaseConfigured) {
+    if (!isBackendConfigured) {
       setLoading(false)
       return
     }
 
-    const unsubscribe = authService.onAuthChange(async (firebaseUser) => {
+    let profileRequest = 0
+    const unsubscribe = authService.onAuthChange(async (authenticatedUser) => {
+      const requestId = ++profileRequest
       setLoading(true)
       setError(null)
-      setUser(firebaseUser)
+      setUser(authenticatedUser)
 
-      if (firebaseUser) {
+      if (authenticatedUser) {
         try {
-          const profile = await userService.getUserProfile(firebaseUser.uid)
-          setUserProfile(profile)
+          const profile = await userService.getUserProfile(authenticatedUser.uid)
+          if (requestId === profileRequest) setUserProfile(profile)
         } catch (err) {
           console.error('Failed to load user profile:', err)
-          setError('Failed to load user profile from Firestore.')
-          setUserProfile(null)
+          if (requestId === profileRequest) {
+            setError('Failed to load user profile from the selected backend.')
+            setUserProfile(null)
+          }
         }
       } else {
         setUserProfile(null)
       }
 
-      setLoading(false)
+      if (requestId === profileRequest) setLoading(false)
     })
 
-    return () => unsubscribe()
+    return () => {
+      profileRequest++
+      unsubscribe()
+    }
   }, [])
 
   const login = async (credentials: LoginCredentials) => {
-    if (!isFirebaseConfigured) {
-      throw new Error('Firebase Authentication is not configured.')
+    if (!isBackendConfigured) {
+      throw new Error('The selected backend is not configured.')
     }
     setError(null)
     setLoading(true)
     try {
-      const userCredential = await authService.loginWithEmail(credentials)
-      const profile = await userService.getUserProfile(userCredential.user.uid)
+      const loginResult = await authService.loginWithEmail(credentials)
+      setUser(loginResult.user)
+      const profile = await userService.getUserProfile(loginResult.user.uid)
       setUserProfile(profile)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Authentication failed'
@@ -88,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userProfile,
     loading,
     error,
-    isConfigured: isFirebaseConfigured,
+    isConfigured: isBackendConfigured,
     login,
     logout,
     isAdmin,

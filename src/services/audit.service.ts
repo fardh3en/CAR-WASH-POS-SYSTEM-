@@ -22,6 +22,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { AuditLogRecord, AuditEventType } from '@/types/audit.types'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const AUDIT_COLLECTION = 'auditLogs'
 
@@ -55,6 +57,31 @@ export const auditService = {
     eventTypeFilter?: AuditEventType | 'ALL',
     limitCount: number = 50
   ): Promise<AuditLogRecord[]> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      let request = getSupabaseClient()
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limitCount)
+      if (startIso && endIso) request = request.gte('created_at', startIso).lt('created_at', endIso)
+      if (eventTypeFilter && eventTypeFilter !== 'ALL') {
+        request = request.eq('event_type', eventTypeFilter)
+      }
+      const { data, error } = await request
+      if (error) throw error
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        eventType: row.event_type as AuditEventType,
+        targetDocumentId: row.target_document_id,
+        targetReference: row.target_reference,
+        performedByUserId: row.performed_by_user_id,
+        performedByUserName: row.performed_by_user_name,
+        performedByUserRole: row.performed_by_user_role as AuditLogRecord['performedByUserRole'],
+        reason: row.reason ?? undefined,
+        metadata: row.metadata ?? undefined,
+        createdAt: row.created_at,
+      }))
+    }
     try {
       let q = query(
         collection(db, AUDIT_COLLECTION),
