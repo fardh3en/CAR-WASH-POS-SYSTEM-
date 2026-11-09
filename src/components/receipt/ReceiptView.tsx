@@ -1,4 +1,5 @@
 import type { Transaction } from '@/types/transaction.types'
+import { formatDateTimeIST } from '@/utils/date.utils'
 
 interface ReceiptViewProps {
   transaction: Transaction
@@ -21,22 +22,10 @@ interface ReceiptViewProps {
 export function ReceiptView({ transaction }: ReceiptViewProps) {
   const { vehicleSnapshot, customerSnapshot, servicePackageSnapshot, pricingSnapshot, staffSnapshot } = transaction
 
-  const arrivedAt = new Date(transaction.vehicleArrivedAt).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const arrivedAt = formatDateTimeIST(transaction.vehicleArrivedAt)
 
   const paidAtStr = transaction.paidAt
-    ? new Date(transaction.paidAt).toLocaleString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+    ? formatDateTimeIST(transaction.paidAt)
     : null
 
   const isCompleted = transaction.status === 'COMPLETED'

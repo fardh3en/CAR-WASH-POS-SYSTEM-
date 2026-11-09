@@ -1,5 +1,10 @@
-import type { User } from 'firebase/auth'
 import type { UserProfile, UserRole } from './user.types'
+
+/** Provider-neutral user identity used by the existing UI. */
+export interface AuthUser {
+  uid: string
+  email: string | null
+}
 
 export interface LoginCredentials {
   email: string
@@ -7,7 +12,7 @@ export interface LoginCredentials {
 }
 
 export interface AuthContextType {
-  user: User | null
+  user: AuthUser | null
   userProfile: UserProfile | null
   loading: boolean
   error: string | null

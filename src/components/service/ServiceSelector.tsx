@@ -60,10 +60,10 @@ export function ServiceSelector({ vehicle, categoryName, onSelectionComplete }: 
 
   const selectedPackage = packages.find((p) => p.id === selectedPackageId)
   const standardPrice = selectedPackageId ? pricesMap[selectedPackageId] : null
-  const isConfigured = standardPrice !== null && standardPrice >= 0
+  const isConfigured = standardPrice !== null && standardPrice > 0
 
   // Calculate actual price
-  const parsedActualPrice = actualPriceInput !== '' ? Math.max(0, parseInt(actualPriceInput, 10) || 0) : null
+  const parsedActualPrice = actualPriceInput !== '' ? Number(actualPriceInput) : null
   const finalActualPrice = isNegotiated ? parsedActualPrice : standardPrice
 
   // Calculate price adjustment difference
@@ -80,12 +80,12 @@ export function ServiceSelector({ vehicle, categoryName, onSelectionComplete }: 
     }
 
     if (!isConfigured) {
-      setErrorMessage('Cannot proceed: The standard price for this package is not configured.')
+      setErrorMessage(`Cannot proceed: "${selectedPackage.name}" is unavailable for ${categoryName}.`)
       return
     }
 
-    if (isNegotiated && (finalActualPrice === null || isNaN(finalActualPrice))) {
-      setErrorMessage('Please enter a valid whole-rupee actual price.')
+    if (isNegotiated && (finalActualPrice === null || !Number.isInteger(finalActualPrice) || finalActualPrice <= 0)) {
+      setErrorMessage('Please enter a positive whole-rupee actual price.')
       return
     }
 
@@ -133,7 +133,7 @@ export function ServiceSelector({ vehicle, categoryName, onSelectionComplete }: 
         {packages.map((pkg) => {
           const price = pricesMap[pkg.id]
           const isSelected = pkg.id === selectedPackageId
-          const hasPrice = price !== null && price >= 0
+          const hasPrice = price !== null && price > 0
 
           return (
             <div
@@ -184,8 +184,8 @@ export function ServiceSelector({ vehicle, categoryName, onSelectionComplete }: 
                     <span className="text-xl font-extrabold text-[hsl(var(--primary))]">₹{price}</span>
                   </div>
                 ) : (
-                  <div className="p-2 rounded bg-red-50 border border-red-200 text-center">
-                    <span className="text-xs font-bold text-red-700 block">Price not configured</span>
+                  <div className="p-2 rounded bg-[hsl(var(--muted))]/40 border border-[hsl(var(--border))] text-center">
+                    <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] block">Service Unavailable</span>
                   </div>
                 )}
               </div>
@@ -206,8 +206,8 @@ export function ServiceSelector({ vehicle, categoryName, onSelectionComplete }: 
               {isConfigured ? (
                 <span className="text-lg font-bold">₹{standardPrice}</span>
               ) : (
-                <span className="text-xs font-bold px-2 py-1 bg-red-100 text-red-700 rounded uppercase">
-                  Price not configured
+                <span className="text-xs font-semibold px-2 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded">
+                  Service Unavailable
                 </span>
               )}
             </div>
@@ -244,7 +244,7 @@ export function ServiceSelector({ vehicle, categoryName, onSelectionComplete }: 
                         <Input
                           id="actualPriceInput"
                           type="number"
-                          min="0"
+                          min="1"
                           step="1"
                           placeholder="e.g. 450"
                           value={actualPriceInput}

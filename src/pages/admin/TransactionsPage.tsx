@@ -8,9 +8,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { FileText, Search, Eye, Filter, RotateCcw, AlertCircle, Printer } from 'lucide-react'
+import { formatDateTimeIST } from '@/utils/date.utils'
 
 export function AdminTransactionsPage() {
-  const { user } = useAuth()
+  const { user, userProfile } = useAuth()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState<boolean>(true)
 
@@ -85,6 +86,7 @@ export function AdminTransactionsPage() {
         paymentId: associatedPayment.id,
         reversalReason: reason,
         adminId: user.uid,
+        adminName: userProfile?.displayName || user.email || 'Administrator',
       })
 
       setReversingPayment(false)
@@ -256,7 +258,7 @@ export function AdminTransactionsPage() {
                     {selectedTx.transactionNumber}
                   </CardTitle>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                    Created: {new Date(selectedTx.createdAt).toLocaleString()}
+                    Created: {formatDateTimeIST(selectedTx.createdAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -312,11 +314,11 @@ export function AdminTransactionsPage() {
                       <p>UPI Ref ID: <span className="font-mono font-semibold">{associatedPayment.upiReferenceNumber}</span></p>
                     )}
                     <p className="text-[hsl(var(--muted-foreground))]">
-                      Recorded by: {associatedPayment.recordedByStaffName} on {new Date(associatedPayment.recordedAt).toLocaleString()}
+                      Recorded by: {associatedPayment.recordedByStaffName} on {formatDateTimeIST(associatedPayment.recordedAt)}
                     </p>
                     {associatedPayment.isReversed && (
                       <div className="p-2 rounded bg-red-50 border border-red-200 text-red-800 font-semibold space-y-0.5">
-                        <p>Status: REVERSED by Admin on {associatedPayment.reversedAt ? new Date(associatedPayment.reversedAt).toLocaleString() : ''}</p>
+                        <p>Status: REVERSED by Admin on {associatedPayment.reversedAt ? formatDateTimeIST(associatedPayment.reversedAt) : ''}</p>
                         <p className="text-[11px] font-normal">Reason: {associatedPayment.reversalReason}</p>
                       </div>
                     )}

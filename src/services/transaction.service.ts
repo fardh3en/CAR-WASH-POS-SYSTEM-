@@ -19,9 +19,11 @@ import type {
   PricingSnapshot,
   StaffSnapshot,
 } from '@/types/transaction.types'
-import { transactionCounterService } from './transactionCounter.service'
+import { getTodayDateString, transactionCounterService } from './transactionCounter.service'
 import { normalizeRegistrationNumber } from '@/utils/vehicle.utils'
 import { auditService } from './audit.service'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const COLLECTION_NAME = 'transactions'
 
@@ -38,6 +40,19 @@ export const transactionService = {
     staffSnapshot: StaffSnapshot
     expectedPickupAt?: string
   }): Promise<Transaction> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data: row, error } = await getSupabaseClient().rpc('rpc_create_transaction', {
+        p_ist_date_string: getTodayDateString(),
+        p_vehicle_snapshot: data.vehicleSnapshot,
+        p_customer_snapshot: data.customerSnapshot,
+        p_service_package_snapshot: data.servicePackageSnapshot,
+        p_pricing_snapshot: data.pricingSnapshot,
+        p_staff_snapshot: data.staffSnapshot,
+        p_expected_pickup_at: data.expectedPickupAt ?? null,
+      })
+      if (error) throw error
+      return mapSupabaseTransaction(row as Record<string, unknown>)
+    }
     try {
       const transactionNumber = await transactionCounterService.generateNextTransactionNumber()
       const docRef = doc(collection(db, COLLECTION_NAME))
@@ -72,6 +87,15 @@ export const transactionService = {
    * Fetch single transaction by ID
    */
   async getTransactionById(id: string): Promise<Transaction | null> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient()
+        .from('transactions')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+      if (error) throw error
+      return data ? mapSupabaseTransaction(data as Record<string, unknown>) : null
+    }
     try {
       const docRef = doc(db, COLLECTION_NAME, id)
       const snap = await getDoc(docRef)
@@ -89,6 +113,16 @@ export const transactionService = {
   async getTransactionsByVehicle(rawRegNumber: string): Promise<Transaction[]> {
     const normalized = normalizeRegistrationNumber(rawRegNumber)
     if (!normalized) return []
+
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient()
+        .from('transactions')
+        .select('*')
+        .filter('vehicle_snapshot->>registrationNumber', 'eq', normalized)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []).map((row) => mapSupabaseTransaction(row as Record<string, unknown>))
+    }
 
     try {
       const q = query(
@@ -111,6 +145,15 @@ export const transactionService = {
    * Fetch recent transactions for Staff shift view or Admin records view.
    */
   async getRecentTransactions(limitCount: number = 20): Promise<Transaction[]> {
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { data, error } = await getSupabaseClient()
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limitCount)
+      if (error) throw error
+      return (data ?? []).map((row) => mapSupabaseTransaction(row as Record<string, unknown>))
+    }
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
@@ -142,6 +185,18 @@ export const transactionService = {
     const reason = cancellationReason.trim()
     if (!reason) {
       throw new Error('A mandatory cancellation reason must be provided.')
+    }
+
+    if (BACKEND_PROVIDER === 'supabase') {
+      const { error } = await getSupabaseClient().rpc('rpc_cancel_transaction', {
+        p_transaction_id: id,
+        p_cancellation_reason: reason,
+        p_user_id: performedBy?.userId ?? null,
+        p_user_name: performedBy?.userName ?? null,
+        p_user_role: performedBy?.userRole ?? null,
+      })
+      if (error) throw error
+      return
     }
 
     const docRef = doc(db, COLLECTION_NAME, id)
@@ -191,4 +246,26 @@ export const transactionService = {
       throw error
     }
   },
+}
+
+function mapSupabaseTransaction(row: Record<string, unknown>): Transaction {
+  return {
+    id: row.id as string,
+    transactionNumber: row.transaction_number as string,
+    status: row.status as Transaction['status'],
+    vehicleSnapshot: row.vehicle_snapshot as VehicleSnapshot,
+    customerSnapshot: row.customer_snapshot as CustomerSnapshot,
+    servicePackageSnapshot: row.service_package_snapshot as ServicePackageSnapshot,
+    pricingSnapshot: row.pricing_snapshot as PricingSnapshot,
+    staffSnapshot: row.staff_snapshot as StaffSnapshot,
+    vehicleArrivedAt: row.vehicle_arrived_at as string,
+    expectedPickupAt: (row.expected_pickup_at as string | null) ?? undefined,
+    cancellationReason: (row.cancellation_reason as string | null) ?? undefined,
+    paymentStatus: row.payment_status as Transaction['paymentStatus'],
+    paidAmount: row.paid_amount as number,
+    paymentMethod: (row.payment_method as Transaction['paymentMethod'] | null) ?? undefined,
+    paidAt: (row.paid_at as string | null) ?? undefined,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
 }

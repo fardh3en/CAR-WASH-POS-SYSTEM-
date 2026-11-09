@@ -3,10 +3,11 @@ import type { VehicleCategory, ServicePackage, PricingRule } from '@/types'
 import { vehicleCategoryService } from '@/services/vehicleCategory.service'
 import { servicePackageService } from '@/services/servicePackage.service'
 import { pricingService, generatePricingRuleId } from '@/services/pricing.service'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tag, Edit2, AlertCircle } from 'lucide-react'
+import { Tag, Edit2, AlertCircle, CheckCircle2, Sparkles, Loader2 } from 'lucide-react'
 
 interface PricingRowItem {
   categoryId: string
@@ -16,10 +17,13 @@ interface PricingRowItem {
 }
 
 export function AdminPricingPage() {
+  const { user, userProfile } = useAuth()
   const [categories, setCategories] = useState<VehicleCategory[]>([])
   const [packages, setPackages] = useState<ServicePackage[]>([])
   const [rules, setRules] = useState<PricingRule[]>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [seeding, setSeeding] = useState<boolean>(false)
+  const [seedSuccessMessage, setSeedSuccessMessage] = useState<string | null>(null)
 
   // Editing Modal / Cell state
   const [editingItem, setEditingItem] = useState<{
@@ -82,20 +86,30 @@ export function AdminPricingPage() {
   const getPrice = (categoryId: string, servicePackageId: string, variant?: string): number | null => {
     const ruleId = generatePricingRuleId(categoryId, servicePackageId, variant)
     const match = rules.find((r) => r.id === ruleId)
-    if (match && typeof match.price === 'number' && match.price >= 0) {
+    if (match && typeof match.price === 'number' && match.price > 0) {
       return match.price
     }
     return null
+  }
+
+  const getPerformedBy = () => {
+    if (!user) return undefined
+    return {
+      userId: user.uid,
+      userName: userProfile?.displayName || user.email || 'Administrator',
+      userRole: (userProfile?.role === 'ADMIN' ? 'ADMIN' : 'STAFF') as 'ADMIN' | 'STAFF',
+    }
   }
 
   const handleSavePrice = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingItem) return
     setErrorMessage(null)
+    setSeedSuccessMessage(null)
 
-    const parsedPrice = parseInt(inputPrice, 10)
-    if (isNaN(parsedPrice) || parsedPrice < 0) {
-      setErrorMessage('Please enter a valid non-negative whole-rupee price.')
+    const parsedPrice = Number(inputPrice)
+    if (!Number.isInteger(parsedPrice) || parsedPrice <= 0) {
+      setErrorMessage('Please enter a valid positive whole-rupee price.')
       return
     }
 
@@ -105,7 +119,8 @@ export function AdminPricingPage() {
         editingItem.categoryId,
         editingItem.servicePackageId,
         parsedPrice,
-        editingItem.variant
+        editingItem.variant,
+        getPerformedBy()
       )
       await loadPricingData()
       setEditingItem(null)
@@ -117,14 +132,58 @@ export function AdminPricingPage() {
     }
   }
 
+  const handleSeedOfficialPricing = async () => {
+    const confirmed = window.confirm(
+      'Apply the official 43 Mr. Wash pricing rules?\n\n' +
+      '• Configures 43 combinations for 17 vehicle classifications.\n' +
+      '• Keeps 14 combinations unavailable (including SUV and Superbike).\n' +
+      '• Records atomic PRICE_CHANGED audit logs.\n' +
+      '• Historical transaction snapshots remain completely unchanged.'
+    )
+    if (!confirmed) return
+
+    setSeeding(true)
+    setErrorMessage(null)
+    setSeedSuccessMessage(null)
+
+    try {
+      const res = await pricingService.seedOfficialPricing(getPerformedBy())
+      await loadPricingData()
+      setSeedSuccessMessage(`Successfully applied official Mr. Wash pricing (${res.configuredCount} rules configured, SUV & Superbike unconfigured).`)
+    } catch (err) {
+      console.error('Failed to seed official pricing:', err)
+      setErrorMessage('Failed to apply official pricing rules.')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Standard Pricing Matrix</h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          Configure standard prices (INR ₹) per Vehicle Category & Service Package. Changes apply to future transactions only.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Standard Pricing Matrix</h1>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Configure standard prices (INR ₹) per Vehicle Category & Service Package. Changes apply to future transactions only.
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => void handleSeedOfficialPricing()}
+          disabled={seeding || loading}
+          className="gap-2 shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+        >
+          {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          Apply Official Mr. Wash Pricing (43 Rules)
+        </Button>
       </div>
+
+      {seedSuccessMessage && (
+        <div className="p-3 rounded-md bg-green-50 border border-green-200 text-green-700 text-xs flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>{seedSuccessMessage}</span>
+        </div>
+      )}
 
       {errorMessage && (
         <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
@@ -140,7 +199,7 @@ export function AdminPricingPage() {
             Pricing Matrix Grid
           </CardTitle>
           <CardDescription>
-            Click edit on any cell to configure or update standard pricing. Unconfigured prices display "Not Configured".
+            Click on any price or dash (—) to configure standard pricing. Dashes indicate unavailable services for that vehicle type.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -192,10 +251,10 @@ export function AdminPricingPage() {
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer border ${
                                 isConfigured
                                   ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--primary))] border-[hsl(var(--border))] hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))]'
-                                  : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                  : 'bg-[hsl(var(--muted))]/20 text-[hsl(var(--muted-foreground))] border-dashed border-[hsl(var(--border))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]'
                               }`}
                             >
-                              <span>{isConfigured ? `₹${price}` : 'Not Configured'}</span>
+                              <span>{isConfigured ? `₹${price}` : '—'}</span>
                               <Edit2 className="h-3 w-3 opacity-60" />
                             </button>
                           </td>
@@ -231,7 +290,7 @@ export function AdminPricingPage() {
                     <Input
                       id="priceModalInput"
                       type="number"
-                      min="0"
+                      min="1"
                       step="1"
                       placeholder="e.g. 500"
                       className="pl-8 text-base font-bold"

@@ -1,4 +1,5 @@
 import type { Transaction } from '@/types/transaction.types'
+import { formatDateTimeIST } from '@/utils/date.utils'
 
 /**
  * Validate and format an Indian mobile phone number stored in DDDDD-DDDDD format
@@ -39,21 +40,7 @@ export function formatPhoneForWhatsApp(phone: string | undefined | null): string
 export function buildWhatsAppMessage(transaction: Transaction): string {
   const { vehicleSnapshot, servicePackageSnapshot, pricingSnapshot, paymentMethod, paidAt, paidAmount, transactionNumber } = transaction
 
-  const dateStr = paidAt
-    ? new Date(paidAt).toLocaleString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : new Date(transaction.createdAt).toLocaleString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+  const dateStr = formatDateTimeIST(paidAt || transaction.createdAt)
 
   const vehicleLine = vehicleSnapshot.displayRegistrationNumber
   const categoryLine = [vehicleSnapshot.categoryName, vehicleSnapshot.variant]

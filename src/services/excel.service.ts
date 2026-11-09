@@ -32,6 +32,8 @@ import { db } from '@/config/firebase'
 import type { Transaction } from '@/types/transaction.types'
 import type { ExcelExportFilterOptions } from '@/types/excel.types'
 import { getPeriodBoundariesIST } from '@/utils/date.utils'
+import { BACKEND_PROVIDER } from '@/config/backend'
+import { getSupabaseClient } from '@/config/supabase'
 
 const TRANSACTIONS_COLLECTION = 'transactions'
 const IST_OFFSET_MINUTES = 330 // UTC+5:30
@@ -134,7 +136,20 @@ export const excelService = {
     // -------------------------------------------------------------------------
     let rawDocs: Transaction[] = []
 
-    if (scope === 'SALES_ONLY') {
+    if (BACKEND_PROVIDER === 'supabase') {
+      let request = getSupabaseClient()
+        .from('transactions')
+        .select('*')
+        .gte('created_at', startIso)
+        .lt('created_at', endIso)
+      if (scope === 'SALES_ONLY') request = request.eq('status', 'COMPLETED')
+      const { data, error } = await request
+      if (error) throw error
+      rawDocs = (data ?? []).map((row) => mapSupabaseTransaction(row as Record<string, unknown>))
+        .filter((tx) => scope === 'SALES_ONLY'
+          ? tx.status === 'COMPLETED' && tx.paymentStatus === 'PAID'
+          : tx.status === 'OPEN' || tx.status === 'CANCELLED')
+    } else if (scope === 'SALES_ONLY') {
       // Sales report: query COMPLETED status
       const txQuery = query(
         collection(db, TRANSACTIONS_COLLECTION),
@@ -426,4 +441,26 @@ export const excelService = {
       recordCount: filteredDocs.length,
     }
   },
+}
+
+function mapSupabaseTransaction(row: Record<string, unknown>): Transaction {
+  return {
+    id: row.id as string,
+    transactionNumber: row.transaction_number as string,
+    status: row.status as Transaction['status'],
+    vehicleSnapshot: row.vehicle_snapshot as Transaction['vehicleSnapshot'],
+    customerSnapshot: row.customer_snapshot as Transaction['customerSnapshot'],
+    servicePackageSnapshot: row.service_package_snapshot as Transaction['servicePackageSnapshot'],
+    pricingSnapshot: row.pricing_snapshot as Transaction['pricingSnapshot'],
+    staffSnapshot: row.staff_snapshot as Transaction['staffSnapshot'],
+    vehicleArrivedAt: row.vehicle_arrived_at as string,
+    expectedPickupAt: (row.expected_pickup_at as string | null) ?? undefined,
+    cancellationReason: (row.cancellation_reason as string | null) ?? undefined,
+    paymentStatus: row.payment_status as Transaction['paymentStatus'],
+    paidAmount: row.paid_amount as number,
+    paymentMethod: (row.payment_method as Transaction['paymentMethod'] | null) ?? undefined,
+    paidAt: (row.paid_at as string | null) ?? undefined,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
 }
