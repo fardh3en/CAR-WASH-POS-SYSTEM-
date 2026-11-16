@@ -8,8 +8,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { useAuth } from '@/hooks/useAuth'
 import { analyticsService } from '@/services/analytics.service'
 import { excelService } from '@/services/excel.service'
+import { mockDataService } from '@/services/mockData.service'
 import {
   getPeriodBoundariesIST,
   type ReportingPeriod,
@@ -31,6 +33,7 @@ import {
   Info,
   Check,
   BarChart2,
+  Sparkles,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -58,6 +61,7 @@ function formatINR(amount: number): string {
 // Main Dashboard Page
 // ---------------------------------------------------------------------------
 export function AdminDashboardPage() {
+  const { user, userProfile } = useAuth()
   const [selectedPeriod, setSelectedPeriod] = useState<ReportingPeriod>('TODAY')
   const [customFrom, setCustomFrom] = useState<string>('')
   const [customTo, setCustomTo] = useState<string>('')
@@ -67,6 +71,9 @@ export function AdminDashboardPage() {
 
   const [activeModal, setActiveModal] = useState<ActiveModalType>(null)
   const [exporting, setExporting] = useState<boolean>(false)
+  const [generatingMock, setGeneratingMock] = useState<boolean>(false)
+  const [mockProgress, setMockProgress] = useState<string>('')
+  const [mockSuccessMsg, setMockSuccessMsg] = useState<string | null>(null)
 
   // Close modals on Escape key
   useEffect(() => {
@@ -78,6 +85,42 @@ export function AdminDashboardPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  const handleGenerateMockData = async () => {
+    if (!user || !userProfile) {
+      setError('Active administrator session required to generate demo data.')
+      return
+    }
+    setGeneratingMock(true)
+    setError(null)
+    setMockSuccessMsg(null)
+    setMockProgress('Starting...')
+    try {
+      const res = await mockDataService.generateDemoSalesData(
+        {
+          staffId: user.uid,
+          staffName: userProfile.displayName || user.email || 'Admin Staff',
+          staffEmail: user.email || 'admin@mrwash.com',
+        },
+        (current, total) => {
+          setMockProgress(`${current}/${total}`)
+        }
+      )
+      if (res.success) {
+        setMockSuccessMsg(res.message)
+        await loadAnalytics()
+      } else {
+        setError('Failed to generate mock transactions.')
+      }
+    } catch (err: unknown) {
+      console.error('Mock data generation failed:', err)
+      const msg = err instanceof Error ? err.message : 'Error generating demo transactions.'
+      setError(msg)
+    } finally {
+      setGeneratingMock(false)
+      setMockProgress('')
+    }
+  }
 
   const handleExportExcel = async () => {
     if (selectedPeriod === 'CUSTOM' && (!customFrom || !customTo)) return
@@ -186,7 +229,21 @@ export function AdminDashboardPage() {
             Authoritative business analytics computed directly from completed transactions
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => void handleGenerateMockData()}
+            disabled={generatingMock || loading}
+            className="gap-1.5 bg-[#0E120A] text-[#D3FA2E] hover:bg-[#1a2014] border border-[#0E120A]"
+          >
+            {generatingMock ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {generatingMock ? `Generating (${mockProgress})...` : 'Generate Demo Data'}
+          </Button>
           <Button
             variant="lime"
             size="sm"
@@ -279,6 +336,23 @@ export function AdminDashboardPage() {
         <Info className="h-3.5 w-3.5 shrink-0 text-[#987E63]" />
         <span>Tap any metric card below to open its detailed breakdown popup. Tap outside to close.</span>
       </p>
+
+      {/* Success State for Demo Data */}
+      {mockSuccessMsg && (
+        <div className="p-3.5 bg-[#D3FA2E]/20 border-2 border-[#0E120A] text-[#0E120A] text-xs font-bold flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4 shrink-0 text-[#0E120A]" />
+            <span>{mockSuccessMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMockSuccessMsg(null)}
+            className="text-xs font-black uppercase tracking-wider underline hover:text-[#312B22]"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Error State */}
       {error && (
