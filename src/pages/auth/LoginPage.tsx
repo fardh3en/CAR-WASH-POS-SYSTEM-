@@ -1,10 +1,9 @@
 import React, { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Lock, Mail, AlertCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { ConfigErrorView } from '@/components/common/ConfigErrorView'
 
 export function LoginPage() {
@@ -15,36 +14,31 @@ export function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (!isConfigured) {
-    return <ConfigErrorView />
-  }
+  if (!isConfigured) return <ConfigErrorView />
 
-  // Redirect if already authenticated
   if (user && userProfile) {
-    if (userProfile.role === 'ADMIN') {
-      return <Navigate to="/admin/dashboard" replace />
-    }
-    if (userProfile.role === 'STAFF') {
-      return <Navigate to="/staff/new-transaction" replace />
-    }
+    if (userProfile.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />
+    if (userProfile.role === 'STAFF') return <Navigate to="/staff/new-transaction" replace />
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
-
     if (!email.trim() || !password) {
       setErrorMessage('Please enter both email and password.')
       return
     }
-
     setSubmitting(true)
     try {
       await login({ email: email.trim(), password })
     } catch (err: unknown) {
-      console.error('Login error:', err)
       const errorStr = err instanceof Error ? err.message : String(err)
-      if (errorStr.includes('invalid-credential') || errorStr.includes('user-not-found') || errorStr.includes('wrong-password')) {
+      if (
+        errorStr.includes('invalid-credential') ||
+        errorStr.includes('user-not-found') ||
+        errorStr.includes('wrong-password') ||
+        errorStr.includes('Invalid login credentials')
+      ) {
         setErrorMessage('Invalid email or password.')
       } else {
         setErrorMessage(errorStr || 'Authentication failed. Please check your credentials.')
@@ -55,20 +49,28 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))] p-4">
-      <Card className="w-full max-w-md shadow-lg border-[hsl(var(--border))]">
-        <CardHeader className="text-center space-y-1">
-          <div className="mx-auto h-12 w-12 rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] flex items-center justify-center font-bold text-2xl mb-2">
-            W
+    <div className="min-h-screen flex items-center justify-center bg-[#F4F5EF] p-4">
+      <div className="w-full max-w-md">
+        {/* Header Brand */}
+        <div className="mb-8 text-center">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <span className="w-3 h-3 rounded-full bg-[#D3FA2E] border border-[#0E120A]" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#312B22]">
+              Mr. Wash POS • Operations
+            </span>
           </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">Mr. Wash POS</CardTitle>
-          <CardDescription className="text-sm">
-            Sign in to access front-desk operations or management portal
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          <h1 className="font-editorial text-4xl font-black text-[#0E120A] tracking-tighter">
+            SIGN IN
+          </h1>
+          <p className="text-xs font-semibold text-[#312B22] mt-1">
+            Front-desk or Management Portal access
+          </p>
+        </div>
+
+        {/* Login Card */}
+        <div className="bg-white border-2 border-[#0E120A] p-8 space-y-5">
           {errorMessage && (
-            <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
@@ -76,49 +78,51 @@ export function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--foreground))]">
+              <label htmlFor="email" className="text-[11px] font-black uppercase tracking-widest text-[#312B22] block">
                 Email Address
               </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@mrwash.com"
-                  className="pl-9"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={submitting}
-                  required
-                />
-              </div>
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@mrwash.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={submitting}
+                required
+              />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--foreground))]">
+              <label htmlFor="password" className="text-[11px] font-black uppercase tracking-widest text-[#312B22] block">
                 Password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-9"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={submitting}
-                  required
-                />
-              </div>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={submitting}
+                required
+              />
             </div>
 
-            <Button type="submit" variant="default" className="w-full h-11" disabled={submitting}>
-              {submitting ? 'Authenticating...' : 'Sign In'}
+            <Button
+              type="submit"
+              variant="lime"
+              size="lg"
+              className="w-full mt-2"
+              disabled={submitting}
+            >
+              {submitting ? 'Authenticating...' : 'Sign In to POS'}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+
+        <p className="text-center text-[11px] text-[#312B22] font-semibold mt-4">
+          Mr. Wash POS • Secure Staff Access Only
+        </p>
+      </div>
     </div>
   )
 }

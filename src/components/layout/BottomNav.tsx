@@ -10,17 +10,17 @@ const staffNavItems = [
 
 export function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-2 flex items-center justify-around z-50 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 border-t-2 border-[#0E120A] bg-[#F4F5EF] px-2 py-2 flex items-center justify-around z-50 md:hidden">
       {staffNavItems.map((item) => (
         <NavLink
           key={item.path}
           to={item.path}
           className={({ isActive }) =>
             cn(
-              'flex flex-col items-center justify-center min-h-[48px] px-3 py-1.5 rounded-lg text-xs font-medium transition-colors w-full',
+              'flex flex-col items-center justify-center min-h-[48px] px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-all w-full',
               isActive
-                ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] font-semibold'
-                : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]'
+                ? 'bg-[#0E120A] text-[#D3FA2E]'
+                : 'text-[#312B22] hover:bg-white hover:text-[#0E120A]'
             )
           }
         >

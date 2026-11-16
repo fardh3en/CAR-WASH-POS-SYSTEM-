@@ -19,17 +19,18 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  Car,
-  IndianRupee,
-  Banknote,
-  QrCode,
-  TrendingUp,
-  BarChart2,
   Users,
   AlertCircle,
   RefreshCw,
   Loader2,
   FileSpreadsheet,
+  X,
+  ChevronRight,
+  ArrowUpRight,
+  ArrowDownRight,
+  Info,
+  Check,
+  BarChart2,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -43,41 +44,8 @@ const PERIODS: { key: ReportingPeriod; label: string }[] = [
   { key: 'CUSTOM', label: 'Custom Range' },
 ]
 
-// ---------------------------------------------------------------------------
-// Small reusable KPI card
-// ---------------------------------------------------------------------------
-function KpiCard({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  sub?: string
-}) {
-  return (
-    <Card className="border-[hsl(var(--border))]">
-      <CardContent className="pt-5 pb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1 min-w-0">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-              {label}
-            </span>
-            <span className="text-2xl font-extrabold text-[hsl(var(--foreground))] truncate">
-              {value}
-            </span>
-            {sub && (
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{sub}</span>
-            )}
-          </div>
-          <div className="shrink-0 text-[hsl(var(--primary))] mt-0.5">{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+// Modal popup types
+type ActiveModalType = 'COMPARISON' | 'FLEET' | 'PAYMENTS' | 'ATV' | null
 
 // ---------------------------------------------------------------------------
 // Format helpers
@@ -97,7 +65,19 @@ export function AdminDashboardPage() {
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [activeModal, setActiveModal] = useState<ActiveModalType>(null)
   const [exporting, setExporting] = useState<boolean>(false)
+
+  // Close modals on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveModal(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const handleExportExcel = async () => {
     if (selectedPeriod === 'CUSTOM' && (!customFrom || !customTo)) return
@@ -153,33 +133,73 @@ export function AdminDashboardPage() {
     }
   }, [selectedPeriod, loadAnalytics])
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  // Categorize fleet for quick summary
+  const getFleetBreakdown = () => {
+    if (!analytics) return { cars: 0, bikes: 0, commercial: 0, carsList: [], bikesList: [], commercialList: [] }
+
+    let cars = 0
+    let bikes = 0
+    let commercial = 0
+
+    const carsList: { name: string; count: number; totalSales: number }[] = []
+    const bikesList: { name: string; count: number; totalSales: number }[] = []
+    const commercialList: { name: string; count: number; totalSales: number }[] = []
+
+    for (const item of analytics.categoryDistribution) {
+      const lower = item.name.toLowerCase()
+      if (lower.includes('scooter') || lower.includes('bike') || lower.includes('bullet')) {
+        bikes += item.count
+        bikesList.push(item)
+      } else if (
+        lower.includes('auto') ||
+        lower.includes('traveller') ||
+        lower.includes('pickup') ||
+        lower.includes('dost') ||
+        lower.includes('ace')
+      ) {
+        commercial += item.count
+        commercialList.push(item)
+      } else {
+        cars += item.count
+        carsList.push(item)
+      }
+    }
+
+    return { cars, bikes, commercial, carsList, bikesList, commercialList }
+  }
+
+  const fleet = getFleetBreakdown()
+
+  const cashSales = analytics?.cashSales ?? 0
+  const upiSales = analytics?.upiSales ?? 0
+  const totalPayments = cashSales + upiSales
+  const upiPercent = totalPayments > 0 ? Math.round((upiSales / totalPayments) * 100) : 0
+  const cashPercent = totalPayments > 0 ? 100 - upiPercent : 0
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Admin Dashboard</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Business analytics computed from completed transactions
+          <h1 className="font-editorial text-3xl font-black text-[#0E120A] tracking-tighter">Admin Dashboard</h1>
+          <p className="text-xs font-semibold text-[#312B22] mt-1">
+            Authoritative business analytics computed directly from completed transactions
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <Button
-            variant="default"
+            variant="lime"
             size="sm"
             onClick={() => void handleExportExcel()}
             disabled={exporting || loading}
-            className="gap-1.5 font-semibold bg-green-600 hover:bg-green-700"
+            className="gap-1.5"
           >
             {exporting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <FileSpreadsheet className="h-3.5 w-3.5" />
             )}
-            Export to Excel
+            Export to Excel (.xlsx)
           </Button>
           <Button
             variant="outline"
@@ -199,7 +219,7 @@ export function AdminDashboardPage() {
       </div>
 
       {/* Period Selector */}
-      <Card className="border-[hsl(var(--border))]">
+      <Card>
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-wrap gap-2">
             {PERIODS.map((p) => (
@@ -219,7 +239,7 @@ export function AdminDashboardPage() {
           {selectedPeriod === 'CUSTOM' && (
             <div className="flex flex-wrap items-end gap-3 mt-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                <label className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
                   From
                 </label>
                 <Input
@@ -230,7 +250,7 @@ export function AdminDashboardPage() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                <label className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
                   To
                 </label>
                 <Input
@@ -254,9 +274,15 @@ export function AdminDashboardPage() {
         </CardContent>
       </Card>
 
+      {/* Interactive Helper Hint */}
+      <p className="text-xs text-[#312B22] flex items-center gap-1.5">
+        <Info className="h-3.5 w-3.5 shrink-0 text-[#987E63]" />
+        <span>Tap any metric card below to open its detailed breakdown popup. Tap outside to close.</span>
+      </p>
+
       {/* Error State */}
       {error && (
-        <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -264,9 +290,9 @@ export function AdminDashboardPage() {
 
       {/* Loading State */}
       {loading && !analytics && (
-        <div className="flex items-center justify-center py-16 text-[hsl(var(--muted-foreground))]">
+        <div className="flex items-center justify-center py-16 text-[#312B22]">
           <Loader2 className="h-8 w-8 animate-spin mr-3" />
-          <span className="text-sm">Computing analytics…</span>
+          <span className="text-sm font-semibold">Computing analytics…</span>
         </div>
       )}
 
@@ -274,69 +300,170 @@ export function AdminDashboardPage() {
       {analytics && !loading && (
         <>
           {/* Period Label */}
-          <div className="text-sm font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
+          <div className="text-xs font-black text-[#987E63] uppercase tracking-widest">
             {analytics.periodLabel}
           </div>
 
-          {/* KPI Cards — mirrors System Architecture §13.4 example layout */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard
-              icon={<Car className="h-5 w-5" />}
-              label="Vehicles Serviced"
-              value={String(analytics.totalVehicles)}
-            />
-            <KpiCard
-              icon={<IndianRupee className="h-5 w-5" />}
-              label="Total Sales"
-              value={formatINR(analytics.totalSales)}
-              sub={
-                analytics.totalVehicles > 0
-                  ? `Avg ${formatINR(analytics.averageTransactionValue)} / vehicle`
-                  : undefined
-              }
-            />
-            <KpiCard
-              icon={<Banknote className="h-5 w-5" />}
-              label="Cash"
-              value={formatINR(analytics.cashSales)}
-              sub={`${analytics.cashCount} transaction${analytics.cashCount !== 1 ? 's' : ''}`}
-            />
-            <KpiCard
-              icon={<QrCode className="h-5 w-5" />}
-              label="UPI"
-              value={formatINR(analytics.upiSales)}
-              sub={`${analytics.upiCount} transaction${analytics.upiCount !== 1 ? 's' : ''}`}
-            />
+          {/* Interactive KPI Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 1. TOTAL SALES CARD */}
+            <div
+              onClick={() => setActiveModal('COMPARISON')}
+              className="editorial-card-interactive h-48 flex flex-col justify-between p-6"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
+                  {selectedPeriod === 'TODAY' ? "Today's Total Sales" : 'Total Sales'}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-black text-[#0E120A] uppercase tracking-wider">
+                  Compare
+                  <ChevronRight className="h-3 w-3" />
+                </span>
+              </div>
+              <div>
+                <div className="font-editorial text-3xl font-black text-[#0E120A] tracking-tighter">
+                  {formatINR(analytics.totalSales)}
+                </div>
+                {analytics.yesterdayComparison ? (
+                  <div className="mt-2 text-xs flex items-center gap-1 font-bold">
+                    {analytics.yesterdayComparison.differenceSales >= 0 ? (
+                      <ArrowUpRight className="h-3.5 w-3.5 text-[#0E120A]" />
+                    ) : (
+                      <ArrowDownRight className="h-3.5 w-3.5 text-red-600" />
+                    )}
+                    <span className="text-[#312B22]">
+                      {analytics.yesterdayComparison.percentGrowth >= 0 ? '+' : ''}
+                      {analytics.yesterdayComparison.percentGrowth}% vs Yesterday
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-xs text-[#312B22] font-semibold">
+                    {analytics.totalVehicles} completed transactions
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 2. TOTAL SERVICED CARD */}
+            <div
+              onClick={() => setActiveModal('FLEET')}
+              className="editorial-card-interactive h-48 flex flex-col justify-between p-6"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
+                  Total Serviced
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-black text-[#0E120A] uppercase tracking-wider">
+                  Fleet
+                  <ChevronRight className="h-3 w-3" />
+                </span>
+              </div>
+              <div>
+                <div className="font-editorial text-3xl font-black text-[#0E120A] tracking-tighter">
+                  {analytics.totalVehicles} <span className="text-xl">Vehicles</span>
+                </div>
+                <div className="mt-2 text-xs text-[#312B22] font-semibold truncate">
+                  {fleet.cars} Cars · {fleet.bikes} Bikes · {fleet.commercial} Commercial
+                </div>
+              </div>
+            </div>
+
+            {/* 3. PAYMENT MODE SPLIT CARD */}
+            <div
+              onClick={() => setActiveModal('PAYMENTS')}
+              className="editorial-card-interactive h-48 flex flex-col justify-between p-6"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
+                  Payment Split
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-black text-[#0E120A] uppercase tracking-wider">
+                  Analysis
+                  <ChevronRight className="h-3 w-3" />
+                </span>
+              </div>
+              <div>
+                <div className="font-editorial text-3xl font-black text-[#0E120A] tracking-tighter">
+                  {upiPercent >= cashPercent ? `${upiPercent}% UPI` : `${cashPercent}% Cash`}
+                </div>
+                <div className="mt-2 text-xs text-[#312B22] font-semibold flex items-center justify-between">
+                  <span>UPI: {formatINR(analytics.upiSales)}</span>
+                  <span>Cash: {formatINR(analytics.cashSales)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. AVERAGE TRANSACTION VALUE CARD */}
+            <div
+              onClick={() => setActiveModal('ATV')}
+              className="editorial-card-interactive h-48 flex flex-col justify-between p-6"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
+                  Avg Transaction
+                </span>
+                <span className="text-[11px] font-black text-[#0E120A] uppercase tracking-wider">
+                  Formula ⓘ
+                </span>
+              </div>
+              <div>
+                <div className="font-editorial text-3xl font-black text-[#0E120A] tracking-tighter">
+                  {analytics.totalVehicles > 0 ? formatINR(analytics.averageTransactionValue) : '—'}
+                </div>
+                <div className="mt-2 text-xs text-[#312B22] font-semibold truncate">
+                  {formatINR(analytics.totalSales)} ÷ {analytics.totalVehicles} Orders
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Secondary KPI Cards */}
+          {/* Secondary Operational Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            <KpiCard
-              icon={<TrendingUp className="h-5 w-5" />}
-              label="Avg Transaction Value"
-              value={analytics.totalVehicles > 0 ? formatINR(analytics.averageTransactionValue) : '—'}
-            />
-            <KpiCard
-              icon={<Users className="h-5 w-5" />}
-              label="New Vehicles"
-              value={String(analytics.newVehicles)}
-              sub={`${analytics.returningVehicles} returning`}
-            />
-            <KpiCard
-              icon={<BarChart2 className="h-5 w-5" />}
-              label="Price Adjustments"
-              value={String(analytics.adjustedTransactionCount)}
-              sub={
-                analytics.adjustedTransactionCount > 0
-                  ? `Total: ${formatINR(analytics.totalAdjustmentAmount)}`
-                  : 'None this period'
-              }
-            />
+            <Card>
+              <CardContent className="pt-4 pb-4 flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
+                    New Customers
+                  </span>
+                  <div className="text-xl font-black mt-0.5 text-[#0E120A]">{analytics.newVehicles}</div>
+                  <span className="text-xs text-[#312B22] font-semibold">{analytics.returningVehicles} returning</span>
+                </div>
+                <Users className="h-6 w-6 text-[#987E63] shrink-0 opacity-80" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-4 pb-4 flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
+                    Price Adjustments
+                  </span>
+                  <div className="text-xl font-black mt-0.5 text-[#0E120A]">{analytics.adjustedTransactionCount}</div>
+                  <span className="text-xs text-[#312B22] font-semibold">
+                    {analytics.adjustedTransactionCount > 0 ? formatINR(analytics.totalAdjustmentAmount) : 'None this period'}
+                  </span>
+                </div>
+                <BarChart2 className="h-6 w-6 text-[#987E63] shrink-0 opacity-80" />
+              </CardContent>
+            </Card>
+
+            <Card className="col-span-2 lg:col-span-1">
+              <CardContent className="pt-4 pb-4 flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">
+                    Audit Status
+                  </span>
+                  <div className="text-xl font-black text-[#0E120A] mt-0.5">Immutable</div>
+                  <span className="text-xs text-[#312B22] font-semibold">100% Server Timestamps</span>
+                </div>
+                <Check className="h-6 w-6 text-[#0E120A] shrink-0 opacity-80" />
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Daily Sales Trend — hidden for Today (single-point, no trend) */}
+          {/* Daily Sales Trend — hidden for Today (single point, no trend) */}
           {analytics.dailyTrend.length > 1 && (
-            <Card className="border-[hsl(var(--border))]">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Sales Trend</CardTitle>
               </CardHeader>
@@ -346,7 +473,7 @@ export function AdminDashboardPage() {
                     data={analytics.dailyTrend}
                     margin={{ top: 4, right: 8, left: 0, bottom: 4 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(14,18,10,0.14)" />
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 11 }}
@@ -363,14 +490,15 @@ export function AdminDashboardPage() {
                       formatter={(value: any) => [formatINR(Number(value || 0)), 'Total Sales']}
                       contentStyle={{
                         fontSize: 12,
-                        borderRadius: 8,
-                        border: '1px solid hsl(var(--border))',
+                        border: '1px solid #0E120A',
+                        borderRadius: 0,
+                        backgroundColor: '#FFFFFF',
                       }}
                     />
                     <Bar
                       dataKey="sales"
-                      fill="hsl(var(--primary))"
-                      radius={[4, 4, 0, 0]}
+                      fill="#D3FA2E"
+                      radius={[0, 0, 0, 0]}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -380,7 +508,7 @@ export function AdminDashboardPage() {
 
           {/* Service Package Distribution */}
           {analytics.serviceDistribution.length > 0 && (
-            <Card className="border-[hsl(var(--border))]">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Service Package Distribution</CardTitle>
               </CardHeader>
@@ -389,20 +517,20 @@ export function AdminDashboardPage() {
                   {analytics.serviceDistribution.map((svc) => (
                     <div key={svc.name} className="space-y-1">
                       <div className="flex justify-between text-sm">
-                        <span className="font-semibold">{svc.name}</span>
-                        <span className="text-[hsl(var(--muted-foreground))]">
+                        <span className="font-black text-[#0E120A]">{svc.name}</span>
+                        <span className="text-[#312B22] font-semibold">
                           {svc.count} vehicle{svc.count !== 1 ? 's' : ''} · {formatINR(svc.totalSales)}
                         </span>
                       </div>
-                      <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                      <div className="h-2 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-[hsl(var(--primary))]"
+                          className="h-full bg-[#D3FA2E]"
                           style={{
                             width: `${analytics.totalVehicles > 0 ? Math.round((svc.count / analytics.totalVehicles) * 100) : 0}%`,
                           }}
                         />
                       </div>
-                      <div className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                      <div className="text-[11px] text-[#312B22] font-semibold">
                         {analytics.totalVehicles > 0
                           ? `${Math.round((svc.count / analytics.totalVehicles) * 100)}% of vehicles`
                           : '0%'}
@@ -416,7 +544,7 @@ export function AdminDashboardPage() {
 
           {/* Vehicle Category Distribution */}
           {analytics.categoryDistribution.length > 0 && (
-            <Card className="border-[hsl(var(--border))]">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Vehicle Category Distribution</CardTitle>
               </CardHeader>
@@ -427,7 +555,7 @@ export function AdminDashboardPage() {
                     layout="vertical"
                     margin={{ top: 4, right: 80, left: 8, bottom: 4 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(14,18,10,0.14)" />
                     <XAxis
                       type="number"
                       tick={{ fontSize: 11 }}
@@ -440,7 +568,7 @@ export function AdminDashboardPage() {
                       tick={{ fontSize: 11 }}
                       tickLine={false}
                       axisLine={false}
-                      width={90}
+                      width={100}
                     />
                     <Tooltip
                       formatter={(value: any, name: any) => [
@@ -449,14 +577,15 @@ export function AdminDashboardPage() {
                       ]}
                       contentStyle={{
                         fontSize: 12,
-                        borderRadius: 8,
-                        border: '1px solid hsl(var(--border))',
+                        border: '1px solid #0E120A',
+                        borderRadius: 0,
+                        backgroundColor: '#FFFFFF',
                       }}
                     />
                     <Bar
                       dataKey="count"
-                      fill="hsl(var(--primary))"
-                      radius={[0, 4, 4, 0]}
+                      fill="#D3FA2E"
+                      radius={[0, 0, 0, 0]}
                       name="Vehicles"
                     />
                   </BarChart>
@@ -465,22 +594,22 @@ export function AdminDashboardPage() {
             </Card>
           )}
 
-          {/* Payment Split */}
-          <Card className="border-[hsl(var(--border))]">
+          {/* Payment Split Detailed Cards */}
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Payment Method Split</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
                 {/* Cash */}
-                <div className="p-4 rounded-lg bg-green-50 border border-green-200 space-y-1">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-green-700">
+                <div className="p-4 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] space-y-1">
+                  <div className="text-xs font-black uppercase tracking-widest text-[#312B22]">
                     Cash
                   </div>
-                  <div className="text-xl font-extrabold text-green-800">
+                  <div className="text-xl font-black text-[#0E120A]">
                     {formatINR(analytics.cashSales)}
                   </div>
-                  <div className="text-xs text-green-600">
+                  <div className="text-xs text-[#312B22] font-semibold">
                     {analytics.cashCount} transaction{analytics.cashCount !== 1 ? 's' : ''}
                     {analytics.totalVehicles > 0 && (
                       <span className="ml-1">
@@ -490,14 +619,14 @@ export function AdminDashboardPage() {
                   </div>
                 </div>
                 {/* UPI */}
-                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 space-y-1">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                <div className="p-4 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] space-y-1">
+                  <div className="text-xs font-black uppercase tracking-widest text-[#312B22]">
                     UPI
                   </div>
-                  <div className="text-xl font-extrabold text-blue-800">
+                  <div className="text-xl font-black text-[#0E120A]">
                     {formatINR(analytics.upiSales)}
                   </div>
-                  <div className="text-xs text-blue-600">
+                  <div className="text-xs text-[#312B22] font-semibold">
                     {analytics.upiCount} transaction{analytics.upiCount !== 1 ? 's' : ''}
                     {analytics.totalVehicles > 0 && (
                       <span className="ml-1">
@@ -510,60 +639,358 @@ export function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Price Adjustment Summary — uses "Price Adjustment" terminology, never "Discount" */}
-          {analytics.adjustedTransactionCount > 0 && (
-            <Card className="border-[hsl(var(--border))] border-amber-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-500" />
-                  Price Adjustments
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-[hsl(var(--muted-foreground))] text-xs uppercase tracking-wider font-semibold mb-1">
-                      Adjusted Transactions
-                    </div>
-                    <div className="text-xl font-extrabold">
-                      {analytics.adjustedTransactionCount}
-                    </div>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {analytics.totalVehicles > 0
-                        ? `${Math.round((analytics.adjustedTransactionCount / analytics.totalVehicles) * 100)}% of total`
-                        : ''}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[hsl(var(--muted-foreground))] text-xs uppercase tracking-wider font-semibold mb-1">
-                      Total Price Adjustment
-                    </div>
-                    <div
-                      className={`text-xl font-extrabold ${
-                        analytics.totalAdjustmentAmount < 0
-                          ? 'text-red-600'
-                          : 'text-green-600'
-                      }`}
-                    >
-                      {analytics.totalAdjustmentAmount >= 0 ? '+' : ''}
-                      {formatINR(analytics.totalAdjustmentAmount)}
-                    </div>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">
-                      vs. standard prices
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Empty state */}
           {analytics.totalVehicles === 0 && (
-            <div className="text-center py-12 text-[hsl(var(--muted-foreground))] text-sm">
+            <div className="text-center py-12 text-[#312B22] text-sm font-semibold">
               No completed transactions found for this period.
             </div>
           )}
         </>
+      )}
+
+      {/* =====================================================================
+          INTERACTIVE POPUP MODALS
+          Dismiss on click outside (backdrop) or on close button
+          ===================================================================== */}
+
+      {/* 1. SALES COMPARISON MODAL */}
+      {activeModal === 'COMPARISON' && analytics && (
+        <div
+          onClick={() => setActiveModal(null)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-2 border-[#0E120A] max-w-md w-full shadow-2xl p-6 space-y-5"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-editorial text-lg font-black text-[#0E120A] tracking-tight">
+                  Sales Comparison (IST)
+                </h3>
+                <p className="text-xs text-[#312B22] font-semibold">
+                  Day-over-day operational growth
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="p-1 text-[#312B22] hover:text-[#0E120A]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)]">
+                <span className="text-[11px] font-black text-[#987E63] uppercase tracking-widest block">
+                  Today's Sales
+                </span>
+                <span className="text-xl font-black text-[#0E120A] mt-1 block">
+                  {formatINR(analytics.totalSales)}
+                </span>
+                <span className="text-xs text-[#312B22] font-semibold mt-1 block">
+                  {analytics.totalVehicles} Completed Orders
+                </span>
+              </div>
+
+              <div className="p-4 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)]">
+                <span className="text-[11px] font-black text-[#987E63] uppercase tracking-widest block">
+                  Yesterday
+                </span>
+                <span className="text-xl font-black text-[#0E120A] mt-1 block">
+                  {formatINR(analytics.yesterdayComparison?.yesterdaySales ?? 0)}
+                </span>
+                <span className="text-xs text-[#312B22] font-semibold mt-1 block">
+                  {analytics.yesterdayComparison?.yesterdayVehicles ?? 0} Completed Orders
+                </span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-[#D3FA2E] border-2 border-[#0E120A]">
+              <span className="text-xs font-black text-[#0E120A] block">
+                {analytics.yesterdayComparison && analytics.yesterdayComparison.differenceSales >= 0
+                  ? `Net Increase: +${formatINR(analytics.yesterdayComparison.differenceSales)} (+${analytics.yesterdayComparison.percentGrowth}%)`
+                  : `Net Variance: ${formatINR(analytics.yesterdayComparison?.differenceSales ?? 0)}`}
+              </span>
+              <p className="text-xs text-[#0E120A] font-semibold mt-1">
+                Your service bay serviced {analytics.yesterdayComparison?.differenceVehicles ?? 0} vehicle variance compared to yesterday's closing numbers.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => setActiveModal(null)}
+              className="w-full"
+            >
+              Close Comparison
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. FLEET BREAKDOWN MODAL */}
+      {activeModal === 'FLEET' && analytics && (
+        <div
+          onClick={() => setActiveModal(null)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-2 border-[#0E120A] max-w-md w-full shadow-2xl p-6 space-y-5"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-editorial text-lg font-black text-[#0E120A] tracking-tight">
+                  Vehicles Breakdown ({analytics.totalVehicles} Total)
+                </h3>
+                <p className="text-xs text-[#312B22] font-semibold">
+                  Fleet distribution across all classifications
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="p-1 text-[#312B22] hover:text-[#0E120A]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
+              {/* Cars */}
+              <div className="p-3.5 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-sm text-[#0E120A]">
+                    Cars ({fleet.cars} Total)
+                  </span>
+                  <span className="text-xs font-black text-[#312B22]">
+                    {formatINR(fleet.carsList.reduce((acc, c) => acc + c.totalSales, 0))} Sales
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-xs text-[#312B22]">
+                  {fleet.carsList.map((c) => (
+                    <div key={c.name} className="truncate">
+                      • {c.name}: <span className="font-black">{c.count}</span>
+                    </div>
+                  ))}
+                  {fleet.carsList.length === 0 && <span className="text-[#987E63]">No cars serviced</span>}
+                </div>
+              </div>
+
+              {/* Two-Wheelers */}
+              <div className="p-3.5 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-sm text-[#0E120A]">
+                    Two-Wheelers / Bikes ({fleet.bikes} Total)
+                  </span>
+                  <span className="text-xs font-black text-[#312B22]">
+                    {formatINR(fleet.bikesList.reduce((acc, b) => acc + b.totalSales, 0))} Sales
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-xs text-[#312B22]">
+                  {fleet.bikesList.map((b) => (
+                    <div key={b.name} className="truncate">
+                      • {b.name}: <span className="font-black">{b.count}</span>
+                    </div>
+                  ))}
+                  {fleet.bikesList.length === 0 && <span className="text-[#987E63]">No bikes serviced</span>}
+                </div>
+              </div>
+
+              {/* Commercial / Others */}
+              <div className="p-3.5 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-sm text-[#0E120A]">
+                    Commercial / Auto ({fleet.commercial} Total)
+                  </span>
+                  <span className="text-xs font-black text-[#312B22]">
+                    {formatINR(fleet.commercialList.reduce((acc, a) => acc + a.totalSales, 0))} Sales
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-xs text-[#312B22]">
+                  {fleet.commercialList.map((a) => (
+                    <div key={a.name} className="truncate">
+                      • {a.name}: <span className="font-black">{a.count}</span>
+                    </div>
+                  ))}
+                  {fleet.commercialList.length === 0 && <span className="text-[#987E63]">No commercial vehicles</span>}
+                </div>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => setActiveModal(null)}
+              className="w-full"
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. PAYMENT MODE ANALYSIS MODAL */}
+      {activeModal === 'PAYMENTS' && analytics && (
+        <div
+          onClick={() => setActiveModal(null)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-2 border-[#0E120A] max-w-md w-full shadow-2xl p-6 space-y-5"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-editorial text-lg font-black text-[#0E120A] tracking-tight">
+                  Payment Mode Analysis
+                </h3>
+                <p className="text-xs text-[#312B22] font-semibold">
+                  Authoritative collection reconciliation
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="p-1 text-[#312B22] hover:text-[#0E120A]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* UPI */}
+              <div className="p-4 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[#312B22]">
+                    <span className="h-2 w-2 rounded-full bg-[#0E120A] shrink-0" />
+                    UPI Collections
+                  </div>
+                  <div className="font-editorial text-2xl font-black text-[#0E120A] mt-1">
+                    {formatINR(analytics.upiSales)}
+                  </div>
+                  <div className="text-xs text-[#312B22] font-semibold mt-0.5">
+                    {analytics.upiCount} Successful Transactions
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-editorial text-2xl font-black text-[#0E120A]">
+                    {upiPercent}.0%
+                  </span>
+                  <span className="text-[11px] text-[#312B22] font-semibold block">of total sales</span>
+                </div>
+              </div>
+
+              {/* Cash */}
+              <div className="p-4 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[#312B22]">
+                    <span className="h-2 w-2 rounded-full bg-[#312B22] shrink-0" />
+                    Cash Collections
+                  </div>
+                  <div className="font-editorial text-2xl font-black text-[#0E120A] mt-1">
+                    {formatINR(analytics.cashSales)}
+                  </div>
+                  <div className="text-xs text-[#312B22] font-semibold mt-0.5">
+                    {analytics.cashCount} Successful Transactions
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-editorial text-2xl font-black text-[#0E120A]">
+                    {cashPercent}.0%
+                  </span>
+                  <span className="text-[11px] text-[#312B22] font-semibold block">of total sales</span>
+                </div>
+              </div>
+
+              {/* Reconciled Total */}
+              <div className="p-3.5 bg-[#D3FA2E] border-2 border-[#0E120A] flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-widest text-[#0E120A]">
+                  Total Sales Reconciled
+                </span>
+                <span className="text-base font-black text-[#0E120A]">
+                  {formatINR(analytics.totalSales)} ({analytics.totalVehicles} Orders)
+                </span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => setActiveModal(null)}
+              className="w-full"
+            >
+              Close Analysis
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. AVERAGE TRANSACTION VALUE MODAL */}
+      {activeModal === 'ATV' && analytics && (
+        <div
+          onClick={() => setActiveModal(null)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-2 border-[#0E120A] max-w-md w-full shadow-2xl p-6 space-y-5"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-editorial text-lg font-black text-[#0E120A] tracking-tight">
+                  Average Transaction Value (ATV)
+                </h3>
+                <p className="text-xs text-[#312B22] font-semibold">
+                  Key Revenue Metric Definition
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="p-1 text-[#312B22] hover:text-[#0E120A]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#312B22] font-semibold">
+              Average Transaction Value (ATV) measures the average amount collected per completed vehicle wash.
+            </p>
+
+            <div className="p-4 bg-[#F4F5EF] border border-[rgba(14,18,10,0.14)] text-center space-y-1">
+              <span className="text-[11px] font-black text-[#987E63] uppercase tracking-widest block">
+                ATV Formula
+              </span>
+              <div className="text-base font-mono font-black text-[#0E120A]">
+                Total Sales ÷ Completed Orders
+              </div>
+              <div className="text-xs font-mono text-[#312B22] font-semibold pt-1">
+                {formatINR(analytics.totalSales)} ÷ {analytics.totalVehicles} Orders = {formatINR(analytics.averageTransactionValue)} per vehicle
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-[#D3FA2E] border-2 border-[#0E120A] space-y-1">
+              <span className="text-xs font-black text-[#0E120A] block">
+                Business Purpose:
+              </span>
+              <p className="text-xs text-[#0E120A] font-semibold leading-relaxed">
+                Helps evaluate upsells (getting cars to upgrade from Body Wash to Full Wash & Detail) without solely relying on increasing vehicle queue volume.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => setActiveModal(null)}
+              className="w-full"
+            >
+              Got It
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

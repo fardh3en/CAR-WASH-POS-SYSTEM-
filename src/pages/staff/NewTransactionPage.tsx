@@ -235,18 +235,18 @@ export function StaffNewTransactionPage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Front-Desk Service Order</h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">
+        <h1 className="font-editorial text-3xl font-black text-[#0E120A] tracking-tighter">Front-Desk Service Order</h1>
+        <p className="text-xs font-semibold text-[#312B22] mt-1">
           Create sales order and collect payment
         </p>
       </div>
 
       {/* Step 1: Vehicle Search Form */}
       {!createdTransaction && (
-        <Card className="border-[hsl(var(--border))]">
+        <Card className="border border-[rgba(14,18,10,0.14)] bg-white">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center justify-between">
-              <span>Step 1: Vehicle Search</span>
+              <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63]">Step 1: Vehicle Search</span>
               {searchExecuted && (
                 <Button variant="ghost" size="sm" onClick={handleResetAll} className="h-8 text-xs">
                   <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reset
@@ -261,7 +261,7 @@ export function StaffNewTransactionPage() {
       )}
 
       {errorMessage && (
-        <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{errorMessage}</span>
         </div>
@@ -273,35 +273,35 @@ export function StaffNewTransactionPage() {
           {foundVehicle ? (
             /* Vehicle Identified */
             <div className="space-y-6">
-              <Card className="border-green-200 bg-green-50/30">
+              <Card className="border border-[rgba(14,18,10,0.14)] bg-white">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-green-700">
+                    <div className="flex items-center gap-2 text-[#0E120A]">
                       <CheckCircle2 className="h-5 w-5" />
-                      <CardTitle className="text-lg">Vehicle Identified</CardTitle>
+                      <CardTitle className="text-lg font-black text-[#0E120A]">Vehicle Identified</CardTitle>
                     </div>
-                    <span className="text-xs font-semibold px-2.5 py-1 bg-green-100 text-green-800 rounded-full uppercase tracking-wider">
+                    <span className="status-completed">
                       {foundVehicle.displayRegistrationNumber}
                     </span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#F4F5EF] p-4 border border-[rgba(14,18,10,0.14)]">
                     <div>
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] block">Vehicle Category</span>
-                      <span className="text-sm font-semibold">{categoryName}</span>
+                      <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Vehicle Category</span>
+                      <span className="text-sm font-black text-[#0E120A]">{categoryName}</span>
                       {foundVehicle.variant && (
-                        <span className="text-xs text-[hsl(var(--muted-foreground))] ml-1">({foundVehicle.variant})</span>
+                        <span className="text-xs text-[#312B22] font-semibold ml-1">({foundVehicle.variant})</span>
                       )}
                     </div>
                     <div>
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] block">Customer Account</span>
+                      <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Customer Account</span>
                       {foundCustomer ? (
-                        <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+                        <span className="text-sm font-black text-[#0E120A]">
                           {foundCustomer.name || 'Unnamed Customer'} {foundCustomer.phoneNumber ? `(${foundCustomer.phoneNumber})` : ''}
                         </span>
                       ) : (
-                        <span className="text-xs italic text-[hsl(var(--muted-foreground))]">
+                        <span className="text-xs italic text-[#312B22] font-semibold">
                           No customer details linked (customerId = null)
                         </span>
                       )}
@@ -323,8 +323,8 @@ export function StaffNewTransactionPage() {
                       {foundCustomer ? 'Update Customer Info' : 'Add Customer Info'}
                     </Button>
                   ) : (
-                    <form onSubmit={handleSaveCustomerInfo} className="bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))] space-y-3">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] block">
+                    <form onSubmit={handleSaveCustomerInfo} className="bg-[#F4F5EF] p-4 border border-[rgba(14,18,10,0.14)] space-y-3">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">
                         Associate Customer Info (Optional)
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -363,11 +363,11 @@ export function StaffNewTransactionPage() {
                 />
               ) : (
                 /* Order Review & Creation Card */
-                <Card className="border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5 shadow-md">
+                <Card className="border-2 border-[#0E120A] bg-white">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <FileCheck className="h-5 w-5 text-[hsl(var(--primary))]" />
+                      <CardTitle className="text-lg font-black text-[#0E120A] flex items-center gap-2">
+                        <FileCheck className="h-5 w-5" />
                         Review & Create Sales Order
                       </CardTitle>
                       <Button variant="outline" size="sm" onClick={() => setSelectedService(null)} className="h-8 text-xs">
@@ -376,30 +376,30 @@ export function StaffNewTransactionPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#F4F5EF] p-4 border border-[rgba(14,18,10,0.14)]">
                       <div>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))] block">Selected Package</span>
-                        <span className="text-base font-bold">{selectedService.servicePackageName}</span>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Selected Package</span>
+                        <span className="text-base font-black text-[#0E120A]">{selectedService.servicePackageName}</span>
                       </div>
                       <div>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))] block">Standard Price</span>
-                        <span className="text-base font-semibold">₹{selectedService.standardPrice}</span>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Standard Price</span>
+                        <span className="text-base font-black text-[#0E120A]">₹{selectedService.standardPrice}</span>
                       </div>
                       <div>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))] block">Final Charged Price</span>
-                        <span className="text-lg font-extrabold text-[hsl(var(--primary))]">₹{selectedService.actualPrice}</span>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Final Charged Price</span>
+                        <span className="text-lg font-black text-[#0E120A]">₹{selectedService.actualPrice}</span>
                         {selectedService.adjustmentReason && (
-                          <span className="text-[11px] text-[hsl(var(--muted-foreground))] block">
+                          <span className="text-[11px] text-[#312B22] font-semibold block">
                             Reason: {selectedService.adjustmentReason}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 bg-[hsl(var(--card))] p-4 rounded-md border border-[hsl(var(--border))]">
-                      <label htmlFor="pickupTime" className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--foreground))] flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                        Customer Expected Return / Pickup Time <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">(Optional)</span>
+                    <div className="space-y-1.5 bg-[#F4F5EF] p-4 border border-[rgba(14,18,10,0.14)]">
+                      <label htmlFor="pickupTime" className="text-[11px] font-black uppercase tracking-widest text-[#312B22] flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-[#987E63]" />
+                        Customer Expected Return / Pickup Time <span className="text-xs font-normal text-[#987E63]">(Optional)</span>
                       </label>
                       <Input
                         id="pickupTime"
@@ -413,11 +413,11 @@ export function StaffNewTransactionPage() {
                     <div className="flex items-center justify-end pt-2">
                       <Button
                         type="button"
-                        variant="default"
+                        variant="lime"
                         size="lg"
                         onClick={handleCreateOrder}
                         disabled={creatingOrder}
-                        className="min-w-[180px] font-bold"
+                        className="min-w-[180px]"
                       >
                         {creatingOrder ? 'Creating Order...' : 'Create Order'}
                       </Button>
@@ -439,45 +439,49 @@ export function StaffNewTransactionPage() {
 
       {/* Step 4: Created Order Confirmation & Phase 6 Payment Action */}
       {createdTransaction && (
-        <Card className="border-green-300 bg-green-50 shadow-lg">
+        <Card className="border-2 border-[#0E120A] bg-white">
           <CardHeader className="pb-3 text-center sm:text-left">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-green-800">
+              <div className="flex items-center gap-2 text-[#0E120A]">
                 <CheckCircle2 className="h-6 w-6" />
-                <CardTitle className="text-xl font-bold">
+                <CardTitle className="text-xl font-black text-[#0E120A]">
                   {createdTransaction.status === 'COMPLETED' ? 'Order Paid & Completed' : 'Order Created Successfully'}
                 </CardTitle>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold bg-green-200 text-green-900 px-3 py-1 rounded-full uppercase tracking-wider">
+                <span className={`text-[10px] font-black px-3 py-1 uppercase tracking-widest border ${
+                  createdTransaction.status === 'COMPLETED'
+                    ? 'bg-[#D3FA2E] text-[#0E120A] border-[#0E120A]'
+                    : 'bg-[#F4F5EF] text-[#0E120A] border-[rgba(14,18,10,0.3)]'
+                }`}>
                   Status: {createdTransaction.status}
                 </span>
-                <span
-                  className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
-                    createdTransaction.paymentStatus === 'PAID' ? 'bg-green-600 text-white' : 'bg-amber-500 text-white'
-                  }`}
-                >
+                <span className={`text-[10px] font-black px-3 py-1 uppercase tracking-widest border ${
+                  createdTransaction.paymentStatus === 'PAID'
+                    ? 'bg-[#D3FA2E] text-[#0E120A] border-[#0E120A]'
+                    : 'bg-[#F4F5EF] text-[#0E120A] border-[rgba(14,18,10,0.3)]'
+                }`}>
                   {createdTransaction.paymentStatus}
                 </span>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-[hsl(var(--card))] p-5 rounded-lg border border-green-200 space-y-4">
-              <div className="flex items-baseline justify-between border-b border-[hsl(var(--border))] pb-3">
+            <div className="bg-[#F4F5EF] p-5 border border-[rgba(14,18,10,0.14)] space-y-4">
+              <div className="flex items-baseline justify-between border-b border-[rgba(14,18,10,0.14)] pb-3">
                 <div>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))] uppercase font-semibold block">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">
                     Transaction Number
                   </span>
-                  <span className="text-xl font-mono font-extrabold text-[hsl(var(--primary))]">
+                  <span className="font-editorial text-xl font-black text-[#0E120A]">
                     {createdTransaction.transactionNumber}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-[hsl(var(--muted-foreground))] uppercase font-semibold block">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">
                     Vehicle Number
                   </span>
-                  <span className="text-base font-bold font-mono">
+                  <span className="text-base font-black font-mono text-[#0E120A]">
                     {createdTransaction.vehicleSnapshot.displayRegistrationNumber}
                   </span>
                 </div>
@@ -485,24 +489,24 @@ export function StaffNewTransactionPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div>
-                  <span className="text-[hsl(var(--muted-foreground))] block">Vehicle Category</span>
-                  <span className="font-semibold text-sm">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Vehicle Category</span>
+                  <span className="font-black text-sm text-[#0E120A]">
                     {createdTransaction.vehicleSnapshot.categoryName} {createdTransaction.vehicleSnapshot.variant ? `(${createdTransaction.vehicleSnapshot.variant})` : ''}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[hsl(var(--muted-foreground))] block">Service Package</span>
-                  <span className="font-semibold text-sm">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Service Package</span>
+                  <span className="font-black text-sm text-[#0E120A]">
                     {createdTransaction.servicePackageSnapshot.name}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[hsl(var(--muted-foreground))] block">Charged Amount</span>
-                  <span className="font-extrabold text-sm text-[hsl(var(--primary))]">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#987E63] block">Charged Amount</span>
+                  <span className="font-black text-sm text-[#0E120A]">
                     ₹{createdTransaction.pricingSnapshot.actualPrice}
                   </span>
                   {createdTransaction.paymentMethod && (
-                    <span className="text-xs font-bold text-green-700 block">
+                    <span className="text-xs font-black text-[#0E120A] block">
                       Paid via {createdTransaction.paymentMethod}
                     </span>
                   )}
@@ -515,10 +519,9 @@ export function StaffNewTransactionPage() {
               {createdTransaction.status === 'OPEN' && createdTransaction.paymentStatus !== 'PAID' ? (
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <Button
-                    variant="default"
+                    variant="lime"
                     size="lg"
                     onClick={() => setShowPaymentModal(true)}
-                    className="font-bold bg-green-600 hover:bg-green-700"
                   >
                     <CreditCard className="h-4 w-4 mr-2" /> Collect Payment Now (₹{createdTransaction.pricingSnapshot.actualPrice})
                   </Button>
@@ -537,7 +540,7 @@ export function StaffNewTransactionPage() {
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-xs text-green-700 font-semibold flex items-center gap-1.5">
+                  <div className="text-xs text-[#0E120A] font-black flex items-center gap-1.5">
                     <CheckCircle2 className="h-4 w-4" /> Payment recorded successfully. Transaction completed.
                   </div>
                   {/* Phase 7: Print Receipt for COMPLETED transactions (Refinement 2) */}
